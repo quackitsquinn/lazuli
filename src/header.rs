@@ -11,32 +11,42 @@ const HEADER: [u8; 5] = *b"RSOCK";
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(C)] // This is important for the safety of the from_bytes_unchecked function.
 /// The header of a packet. When a packet is sent over a socket, it is prepended with this header.
-pub struct PacketHeader {
+/// # Why the type parameter?
+/// The type parameter is used to have some sort of type safety.
+/// Without the type parameter, it would be possible to create a PacketHeader with a `type_id` and `payload_size` that do not match the actual type of the payload.
+/// This would lead to undefined behavior.
+///
+/// The type parameter is used to ensure that the `type_id` and `payload_size` match the actual type of the payload.
+/// You can make an untyped PacketHeader by using `PacketHeader<UnknownType>`.
+pub struct PacketHeader<T>
+where
+    T: 'static + Copy,
+{
+    // should always be "RSOCK"
     header: [u8; 5],
     checksum: u32,
     payload_size: u32,
     type_id: u32,
+    // allow for some sort of type safety
+    _phantom: std::marker::PhantomData<T>,
 }
+/// A ZST that represents an unknown type.
+/// This is used when the type of the payload is unknown.
+#[derive(Clone, Copy)]
+pub struct UnknownType;
 
-impl PacketHeader {
-    /// Creates a new PacketHeader with the given payload_size and type_id.
-    /// # Safety
-    /// The caller must ensure that the payload_size is the same as the size of the payload, and that the type_id is the same as the type_id of the payload.
-    pub unsafe fn new(payload_size: u32, type_id: u32) -> PacketHeader {
-        PacketHeader {
-            header: HEADER,
-            checksum: 0,
-            payload_size,
-            type_id,
-        }
-    }
+impl<T> PacketHeader<T>
+where
+    T: 'static + Copy,
+{
     /// Creates a new PacketHeader with the type_id of T and the payload_size of T.
-    pub fn auto<T: 'static>() -> PacketHeader {
+    pub fn auto() -> PacketHeader<T> {
         PacketHeader {
             header: HEADER,
             checksum: 0,
             payload_size: std::mem::size_of::<T>() as u32,
             type_id: hash_type_id::<T>(),
+            _phantom: std::marker::PhantomData,
         }
     }
     /// Calculates the checksum of the payload. Sets the checksum field to the calculated checksum.
@@ -52,26 +62,65 @@ impl PacketHeader {
         self.checksum == hasher.finish() as u32
     }
 
+    /// Converts the PacketHeader into a byte array.
+    pub fn to_bytes(&self) -> [u8; mem::size_of::<PacketHeader<UnknownType>>()] {
+        unsafe {
+            // SAFETY: We know that PacketHeader<?> is the same size as PacketHeader<UnknownType>
+            let bytes = std::mem::transmute_copy::<
+                PacketHeader<T>,
+                [u8; mem::size_of::<PacketHeader<UnknownType>>()],
+            >(self);
+            bytes
+        }
+    }
+}
+
+impl PacketHeader<UnknownType> {
+    /// Converts the PacketHeader into a PacketHeader with a different type.
+    /// # Safety
+    /// The caller must ensure that the type_id and payload_size are correct.
+    /// The caller must also ensure that the type T is the correct type.
+    pub unsafe fn into_ty<U: Copy>(self) -> PacketHeader<U> {
+        assert_eq!(self.payload_size, std::mem::size_of::<U>() as u32);
+        assert_eq!(self.type_id, hash_type_id::<U>());
+
+        PacketHeader {
+            header: self.header,
+            checksum: self.checksum,
+            payload_size: self.payload_size,
+            type_id: self.type_id,
+            _phantom: std::marker::PhantomData,
+        }
+    }
     /// Creates a new PacketHeader from a byte array.
     /// # Safety
     /// This function is unsafe because it creates a PacketHeader from a byte array without checking the checksum.
     /// Use `PacketHeader::from_bytes` if you want to check the checksum.
-    pub unsafe fn from_bytes_unchecked(bytes: &[u8]) -> PacketHeader {
-        assert!(bytes.len() == mem::size_of::<PacketHeader>());
-        assert!(bytes.starts_with(&HEADER));
+    pub unsafe fn from_bytes_unchecked(bytes: &[u8]) -> PacketHeader<UnknownType> {
+        assert!(
+            bytes.len() == mem::size_of::<PacketHeader<UnknownType>>(),
+            "bytes.len() = {}",
+            bytes.len()
+        );
+        assert!(
+            bytes.starts_with(&HEADER),
+            "Header is not correct (Expected: {:?}, Got: {:?})",
+            HEADER,
+            &bytes[..5]
+        );
         // Safety: We just checked that the length of bytes is the same as the size of PacketHeader
         // and that it starts with the HEADER.
-        let tmut: PacketHeader = unsafe { *(bytes.as_ptr() as *const PacketHeader) };
-        tmut
+        unsafe { *(bytes.as_ptr() as *const PacketHeader<UnknownType>) }
     }
     /// Creates a new PacketHeader from a byte array.
-    pub fn from_bytes(bytes: &[u8], data: &[u8]) -> Option<PacketHeader> {
-        let mut header = unsafe { PacketHeader::from_bytes_unchecked(bytes) };
+    pub fn from_bytes(bytes: &[u8], data: &[u8]) -> Option<PacketHeader<UnknownType>> {
+        let header: PacketHeader<UnknownType> =
+            unsafe { PacketHeader::<UnknownType>::from_bytes_unchecked(bytes) };
         assert_eq!(header.payload_size as usize, data.len());
-        if header.verify_checksum(data)
-            && bytes.len() == mem::size_of::<PacketHeader>()
-            && bytes.starts_with(&HEADER)
-        {
+        let checksum_ok: bool = header.verify_checksum(data);
+        let len_ok: bool = bytes.len() == mem::size_of::<UnknownType>();
+        let header_ok: bool = bytes.starts_with(&HEADER);
+        if checksum_ok && len_ok && header_ok {
             Some(header)
         } else {
             None
@@ -87,19 +136,17 @@ mod tests {
 
     #[test]
     fn test_packet_header() {
-        let mut header = unsafe { PacketHeader::new(10, 10) };
+        let mut header: PacketHeader<u32> = PacketHeader::auto();
         let data = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
         header.calculate_checksum(&data);
-        let bytes = unsafe {
-            std::mem::transmute::<PacketHeader, [u8; mem::size_of::<PacketHeader>()]>(header)
-        };
+        let bytes = header.to_bytes();
         let new_header = PacketHeader::from_bytes(&bytes, &data).unwrap();
-        assert_eq!(header, new_header);
+        let ty_header = unsafe { new_header.into_ty::<u32>() };
     }
 
     #[test]
     fn test_new_auto() {
-        let header = PacketHeader::auto::<u32>();
+        let header: PacketHeader<u32> = PacketHeader::auto();
         assert_eq!(header.payload_size, 4);
         assert_eq!(header.type_id, hash_type_id::<u32>());
     }

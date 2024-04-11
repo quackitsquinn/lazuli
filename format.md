@@ -54,3 +54,13 @@ struct RawPacket {
   - This makes making multiple streams tricky because you have to borrow the client as mutable, which is not possible if you have multiple streams.
 - I think a good solution would to have an Rc of the client, and then clone the Rc for each stream. 
   - This would allow for multiple streams to be created, but the client would still be mutable.
+
+
+### Current planned support
+
+- [x] Basic TCP communication
+- [x] Communication without serialization
+- [x] Cross platform support
+- [ ] Pointer based data structures (vec, str, etc) (This is planned to be supported in the future)
+  - This would be done by having custom serialization and deserialization functions for each data structure
+- [ ] Cross language support (not planned)

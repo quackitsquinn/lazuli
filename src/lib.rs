@@ -1,3 +1,4 @@
+#![allow(dead_code)] // TODO: Remove when codebase is more mature
 use std::{
     any,
     hash::{DefaultHasher, Hash, Hasher},
