@@ -5,6 +5,7 @@ use std::{
 };
 
 mod header;
+mod sendable;
 mod sendable_impl;
 
 /// Hashes the type_id of T.

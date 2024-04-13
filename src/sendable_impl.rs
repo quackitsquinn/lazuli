@@ -59,10 +59,31 @@ macro_rules! sendable_int {
 
 sendable_int!(u8, u16, u32, u64);
 
+impl<T> Sendable for Vec<T>
+where
+    T: Sendable,
+{
+    fn send(&self) -> Vec<u8> {
+        let mut data = Vec::new();
+        for item in self {
+            data.append(&mut item.send());
+        }
+        data
+    }
+
+    fn recv(data: &mut ByteStack) -> Self {
+        let mut vec = Vec::new();
+        while data.data.position() < data.data.get_ref().len() as u64 {
+            vec.push(T::recv(data));
+        }
+        vec
+    }
+}
+
 #[cfg(test)]
 mod tests {
     macro_rules! test_sendable {
-        ($t:ty, $v:expr) => {
+        ($t:ty, $v:expr) => { /* where t: default + int */
             let mut data = ByteStack::new();
             let mut value: $t = $v;
             value.send().iter().for_each(|&b| data.append(vec![b]));

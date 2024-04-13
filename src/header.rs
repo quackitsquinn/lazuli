@@ -13,20 +13,20 @@ const HEADER: [u8; 5] = *b"RSOCK";
 /// The header of a packet. When a packet is sent over a socket, it is prepended with this header.
 /// # Why the type parameter?
 /// The type parameter is used to have some sort of type safety.
-/// Without the type parameter, it would be possible to create a PacketHeader with a `type_id` and `payload_size` that do not match the actual type of the payload.
+/// Without the type parameter, it would be possible to create a PacketHeader with a `type_id` that does not match the actual type of the payload.
 /// This would lead to undefined behavior.
 ///
-/// The type parameter is used to ensure that the `type_id` and `payload_size` match the actual type of the payload.
-/// You can make an untyped PacketHeader by using `PacketHeader<UnknownType>`.
+/// The type parameter is used to ensure that the `type_id` matches the actual type of the payload.
+/// You can make an untyped PacketHeader by using `PacketHeader<UnknownType>`, but this is only intended for receiving packets.
 pub struct PacketHeader<T>
 where
-    T: 'static + Copy,
+    T: 'static,
 {
     // should always be "RSOCK"
     header: [u8; 5],
     has_checksum: bool,
     checksum: u32,
-    payload_size: u32,
+    pub payload_size: u32,
     type_id: u32,
     // allow for some sort of type safety
     _phantom: std::marker::PhantomData<T>,
@@ -38,7 +38,7 @@ pub struct UnknownType;
 
 impl<T> PacketHeader<T>
 where
-    T: 'static + Copy,
+    T: 'static,
 {
     /// Creates a new PacketHeader with the type_id of T and the payload_size of T.
     pub fn auto() -> PacketHeader<T> {
@@ -47,6 +47,23 @@ where
             checksum: 0,
             has_checksum: false,
             payload_size: std::mem::size_of::<T>() as u32,
+            type_id: hash_type_id::<T>(),
+            _phantom: std::marker::PhantomData,
+        }
+    }
+    /// Creates a new PacketHeader with the specified length of the payload.
+    ///
+    /// This can be useful for types where the size of the payload is not constant. (e.g. Vec<T>, String, etc.)
+    /// This can also be useful for reference types.
+    ///
+    /// # Safety
+    /// The caller must ensure that the payload_size is correct, and that the sendable implementation accounts for the variable size of the payload.
+    pub unsafe fn new(payload_size: u32) -> PacketHeader<T> {
+        PacketHeader {
+            header: HEADER,
+            checksum: 0,
+            has_checksum: false,
+            payload_size,
             type_id: hash_type_id::<T>(),
             _phantom: std::marker::PhantomData,
         }
