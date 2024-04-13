@@ -24,6 +24,7 @@ where
 {
     // should always be "RSOCK"
     header: [u8; 5],
+    has_checksum: bool,
     checksum: u32,
     payload_size: u32,
     type_id: u32,
@@ -44,6 +45,7 @@ where
         PacketHeader {
             header: HEADER,
             checksum: 0,
+            has_checksum: false,
             payload_size: std::mem::size_of::<T>() as u32,
             type_id: hash_type_id::<T>(),
             _phantom: std::marker::PhantomData,
@@ -65,7 +67,7 @@ where
     /// Converts the PacketHeader into a byte array.
     pub fn to_bytes(&self) -> [u8; mem::size_of::<PacketHeader<UnknownType>>()] {
         unsafe {
-            // SAFETY: We know that PacketHeader<?> is the same size as PacketHeader<UnknownType>
+            // SAFETY: We know that PacketHeader<T> is the same size as PacketHeader<UnknownType>
             let bytes = std::mem::transmute_copy::<
                 PacketHeader<T>,
                 [u8; mem::size_of::<PacketHeader<UnknownType>>()],
@@ -87,6 +89,7 @@ impl PacketHeader<UnknownType> {
         PacketHeader {
             header: self.header,
             checksum: self.checksum,
+            has_checksum: self.has_checksum,
             payload_size: self.payload_size,
             type_id: self.type_id,
             _phantom: std::marker::PhantomData,
