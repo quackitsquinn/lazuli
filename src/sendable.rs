@@ -193,6 +193,32 @@ where
     }
 }
 
+impl<T> Sendable for Box<T>
+where
+    T: Sendable + Copy,
+{
+    type Error = T::Error;
+    fn header(&self) -> PacketHeader<Self> {
+        unsafe { PacketHeader::new(self.size()) }
+    }
+
+    fn size_const() -> bool {
+        T::size_const()
+    }
+
+    fn size(&self) -> u32 {
+        T::size(&**self)
+    }
+
+    fn send(&self) -> Vec<u8> {
+        T::send(&**self)
+    }
+
+    fn recv(data: &mut dyn Read) -> Result<Self, Self::Error> {
+        Ok(Box::new(T::recv(data)?))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     //! Thank god for macros.
@@ -301,6 +327,15 @@ mod tests {
         assert_eq!(data[0], 0);
         let mut reader = std::io::Cursor::new(&data);
         let result = Option::<u32>::recv(&mut reader).unwrap();
+        assert_eq!(value, result);
+    }
+
+    #[test]
+    fn test_box_send() {
+        let value = Box::new(42);
+        let data = value.send();
+        let mut reader = std::io::Cursor::new(&data);
+        let result = Box::<u32>::recv(&mut reader).unwrap();
         assert_eq!(value, result);
     }
 }
