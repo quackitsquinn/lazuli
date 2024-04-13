@@ -60,17 +60,7 @@ where
 {
     type Error = T::Error;
     fn header(&self) -> PacketHeader<Self> {
-        if T::size_const() {
-            // Safety: We know that the size of the payload is constant, so we can calculate the size of the payload.
-            unsafe { PacketHeader::new((std::mem::size_of::<T>() * self.len()) as u32) }
-        } else {
-            let mut size = 0;
-            for item in self {
-                size += item.size();
-            }
-            // Safety: We have just calculated the size of the payload.
-            unsafe { PacketHeader::new(size) }
-        }
+        unsafe { PacketHeader::new(self.size()) }
     }
 
     fn size_const() -> bool {
@@ -78,15 +68,22 @@ where
     }
 
     fn size(&self) -> u32 {
-        let mut size = 0;
-        for item in self {
-            size += item.size();
+        if T::size_const() {
+            // Safety: We know that the size of the payload is constant, so we can calculate the size of the payload.
+            (std::mem::size_of::<T>() * self.len() + 4) as u32 // Add 4 bytes for the length of the vector.
+        } else {
+            let mut size = 0;
+            for item in self {
+                size += item.size();
+            }
+            // Safety: We have just calculated the size of the payload.
+            size + 4 // Add 4 bytes for the length of the vector.
         }
-        size
     }
 
     fn send(&self) -> Vec<u8> {
         let mut data: Vec<u8> = Vec::new();
+        data.extend((self.len() as u32).send());
         for item in self {
             data.extend(item.send());
         }
@@ -95,11 +92,9 @@ where
 
     fn recv(data: &mut dyn Read) -> Result<Self, Self::Error> {
         let mut vec = Vec::new();
-        loop {
-            match T::recv(data) {
-                Ok(item) => vec.push(item),
-                Err(_) => break,
-            }
+        let length = u32::recv(data).unwrap_or(0);
+        for _ in 0..length {
+            vec.push(T::recv(data)?);
         }
         Ok(vec)
     }
@@ -171,4 +166,20 @@ mod tests {
         f64,
         test_f64_vec
     );
+
+    #[test]
+    fn test_vec_variable_size() {
+        let mut vecs = Vec::<Vec<u8>>::new();
+        for i in 0..10 {
+            let mut vec = Vec::new();
+            for j in 0..i {
+                vec.push(j);
+            }
+            vecs.push(vec);
+        }
+        let data = vecs.send();
+        let mut reader = std::io::Cursor::new(&data);
+        let result = Vec::<Vec<u8>>::recv(&mut reader).unwrap();
+        assert_eq!(vecs, result);
+    }
 }
