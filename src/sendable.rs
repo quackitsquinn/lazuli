@@ -100,6 +100,35 @@ where
     }
 }
 
+impl Sendable for String {
+    type Error = std::io::Error;
+    fn header(&self) -> PacketHeader<Self> {
+        unsafe { PacketHeader::new(self.size()) }
+    }
+
+    fn size_const() -> bool {
+        false
+    }
+
+    fn size(&self) -> u32 {
+        self.len() as u32 + 4 // Add 4 bytes for the length of the string.
+    }
+
+    fn send(&self) -> Vec<u8> {
+        let mut data = Vec::new();
+        data.extend((self.len() as u32).send());
+        data.extend(self.as_bytes());
+        data
+    }
+
+    fn recv(data: &mut dyn Read) -> Result<Self, Self::Error> {
+        let length = u32::recv(data).unwrap_or(0);
+        let mut buffer = vec![0; length as usize];
+        data.read_exact(&mut buffer)?;
+        Ok(String::from_utf8(buffer).unwrap())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     //! Thank god for macros.
@@ -181,5 +210,13 @@ mod tests {
         let mut reader = std::io::Cursor::new(&data);
         let result = Vec::<Vec<u8>>::recv(&mut reader).unwrap();
         assert_eq!(vecs, result);
+    }
+    #[test]
+    fn test_string_send() {
+        let value = "Hello, World!".to_string();
+        let data = value.send();
+        let mut reader = std::io::Cursor::new(&data);
+        let result = String::recv(&mut reader).unwrap();
+        assert_eq!(value, result);
     }
 }
