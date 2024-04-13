@@ -54,6 +54,23 @@ impl_sendable_number!(i8, i16, i32, i64, i128);
 
 impl_sendable_number!(f32, f64);
 
+impl Sendable for bool {
+    type Error = std::io::Error;
+
+    fn send(&self) -> Vec<u8> {
+        if *self {
+            vec![1]
+        } else {
+            vec![0]
+        }
+    }
+
+    fn recv(data: &mut dyn Read) -> Result<Self, Self::Error> {
+        let mut buffer = [0; 1];
+        data.read_exact(&mut buffer)?;
+        Ok(buffer[0] != 0)
+    }
+}
 impl<T> Sendable for Vec<T>
 where
     T: Sendable,
@@ -126,6 +143,53 @@ impl Sendable for String {
         let mut buffer = vec![0; length as usize];
         data.read_exact(&mut buffer)?;
         Ok(String::from_utf8(buffer).unwrap())
+    }
+}
+
+impl<T> Sendable for Option<T>
+where
+    T: Sendable,
+{
+    type Error = T::Error;
+    fn header(&self) -> PacketHeader<Self> {
+        match self {
+            Some(value) => unsafe { PacketHeader::new(value.size() + 1) },
+            None => unsafe { PacketHeader::new(1) },
+        }
+    }
+
+    fn size_const() -> bool {
+        T::size_const()
+    }
+
+    fn size(&self) -> u32 {
+        match self {
+            Some(value) => value.size() + 1,
+            None => 1,
+        }
+    }
+
+    fn send(&self) -> Vec<u8> {
+        let mut data = Vec::new();
+        match self {
+            Some(value) => {
+                data.extend(true.send());
+                data.extend(value.send());
+            }
+            None => {
+                data.extend(false.send());
+            }
+        }
+        data
+    }
+
+    fn recv(data: &mut dyn Read) -> Result<Self, Self::Error> {
+        let is_present = bool::recv(data).unwrap();
+        if !is_present {
+            Ok(None)
+        } else {
+            Ok(Some(T::recv(data)?))
+        }
     }
 }
 
@@ -217,6 +281,26 @@ mod tests {
         let data = value.send();
         let mut reader = std::io::Cursor::new(&data);
         let result = String::recv(&mut reader).unwrap();
+        assert_eq!(value, result);
+    }
+
+    #[test]
+    fn test_option_send_some() {
+        let value = Some(42);
+        let data = value.send();
+        assert_eq!(data[0], 1);
+        let mut reader = std::io::Cursor::new(&data);
+        let result = Option::<u32>::recv(&mut reader).unwrap();
+        assert_eq!(value, result);
+    }
+
+    #[test]
+    fn test_option_send_none() {
+        let value = None;
+        let data = value.send();
+        assert_eq!(data[0], 0);
+        let mut reader = std::io::Cursor::new(&data);
+        let result = Option::<u32>::recv(&mut reader).unwrap();
         assert_eq!(value, result);
     }
 }
