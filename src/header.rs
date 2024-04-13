@@ -73,9 +73,13 @@ where
         let mut hasher = DefaultHasher::new();
         hasher.write(payload);
         self.checksum = hasher.finish() as u32;
+        self.has_checksum = true;
     }
     /// Verifies the checksum of the payload.
     pub fn verify_checksum(&self, payload: &[u8]) -> bool {
+        if !self.has_checksum {
+            return true;
+        }
         let mut hasher = DefaultHasher::new();
         hasher.write(payload);
         self.checksum == hasher.finish() as u32
@@ -138,7 +142,7 @@ impl PacketHeader<UnknownType> {
             unsafe { PacketHeader::<UnknownType>::from_bytes_unchecked(bytes) };
         assert_eq!(header.payload_size as usize, data.len());
         let checksum_ok: bool = header.verify_checksum(data);
-        let len_ok: bool = bytes.len() == mem::size_of::<UnknownType>();
+        let len_ok: bool = bytes.len() == mem::size_of::<PacketHeader<UnknownType>>();
         let header_ok: bool = bytes.starts_with(&HEADER);
         if checksum_ok && len_ok && header_ok {
             Some(header)
@@ -156,12 +160,13 @@ mod tests {
 
     #[test]
     fn test_packet_header() {
-        let mut header: PacketHeader<u32> = PacketHeader::auto();
+        let mut header: PacketHeader<[u8; 10]> = PacketHeader::auto();
         let data = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
         header.calculate_checksum(&data);
         let bytes = header.to_bytes();
         let new_header = PacketHeader::from_bytes(&bytes, &data).unwrap();
-        let ty_header = unsafe { new_header.into_ty::<u32>() };
+        let ty_header = unsafe { new_header.into_ty::<[u8; 10]>() };
+        assert_eq!(header, ty_header);
     }
 
     #[test]
