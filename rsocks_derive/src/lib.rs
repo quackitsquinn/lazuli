@@ -62,7 +62,6 @@ fn impl_sendable(ast: &syn::DeriveInput) -> proc_macro::TokenStream {
         })
         .collect();
     // Generate the size_const fn. (Check if all fields have a const size)
-    // TODO: Cache the result of size_const
     let dyn_size = fields.iter().map(|field| {
         let ty = &field.ty;
         quote! {
@@ -80,7 +79,6 @@ fn impl_sendable(ast: &syn::DeriveInput) -> proc_macro::TokenStream {
             }
         })
         .collect();
-
     quote! {
 
         #field_impl_check // Check that all fields implement Sendable
@@ -95,8 +93,14 @@ fn impl_sendable(ast: &syn::DeriveInput) -> proc_macro::TokenStream {
             }
 
             fn size_const() -> bool {
-                true
-                #(&& #dyn_size)*
+                static size_l: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+                *size_l.get_or_init(|| {
+                    let mut size = true;
+                    #(
+                        size &= #dyn_size;
+                    )*
+                    size
+                })
             }
 
             fn send(&self) -> Vec<u8> {
