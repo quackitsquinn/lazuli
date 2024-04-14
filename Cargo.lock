@@ -5,3 +5,10 @@ version = 3
 [[package]]
 name = "rsock"
 version = "0.1.0"
+dependencies = [
+ "rsocks",
+]
+
+[[package]]
+name = "rsocks"
+version = "0.1.0"
