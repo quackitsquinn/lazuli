@@ -1,9 +1,15 @@
 [package]
-name = "rsocks"
+name = "rsocks_derive"
 version = "0.1.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[lib]
+proc-macro = true
+
 [dependencies]
+proc-macro2 = "1.0.79"
+quote = "1.0.36"
 static_assertions = "1.1.0"
+syn = "2.0.58"

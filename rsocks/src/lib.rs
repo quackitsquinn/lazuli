@@ -14,6 +14,9 @@ fn hash_type_id<T: 'static>() -> u32 {
     any::TypeId::of::<T>().hash(&mut hasher);
     hasher.finish() as u32
 }
+// Re-export for proc-macro
+#[doc(hidden)]
+pub use static_assertions as __sa;
 
 pub use header::*;
 pub use sendable::Sendable;

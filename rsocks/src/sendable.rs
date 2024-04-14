@@ -7,7 +7,7 @@ pub trait Sendable: Sized {
     type Error: std::error::Error;
     /// Returns the header of the packet.
     fn header(&self) -> PacketHeader<Self> {
-        PacketHeader::auto()
+        unsafe { PacketHeader::new(self.size()) }
     }
     /// Returns whether the size of the type is constant.
     /// This is used to determine if the type needs special handling.

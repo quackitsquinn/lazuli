@@ -5,9 +5,10 @@ version = "0.1.0"
 edition = "2021"
 
 [workspace]
-members = ["rsocks"]
+members = ["rsocks", "rsocks_derive"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 rsocks = { path = "rsocks" }
+rsocks_derive = { path = "rsocks_derive" }
 
