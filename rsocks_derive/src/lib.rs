@@ -6,9 +6,13 @@ use quote::quote;
 #[proc_macro_derive(Sendable, attributes(error_type))]
 pub fn derive_sendable(input: TokenStream) -> TokenStream {
     // Parse the input tokens into a syntax tree
-    let input = syn::parse(input).unwrap();
+    let input = syn::parse(input);
+
+    if let Err(e) = input {
+        return e.to_compile_error().into();
+    }
     // Build the impl
-    let expanded = impl_sendable(&input);
+    let expanded = impl_sendable(&input.unwrap());
     // Return the generated impl
     TokenStream::from(expanded)
 }
