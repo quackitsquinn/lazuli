@@ -1,7 +1,10 @@
+use std::{collections::HashMap, fs};
+
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
 
 use quote::quote;
+use syn::Type;
 
 #[proc_macro_derive(Sendable, attributes(error_type))]
 pub fn derive_sendable(input: TokenStream) -> TokenStream {
@@ -21,20 +24,39 @@ fn impl_sendable(ast: &syn::DeriveInput) -> proc_macro::TokenStream {
     let name = &ast.ident;
     // Get the fields of the struct
     // TODO: Handle tuple structs
-    // TODO: Throughout the code make it account for duplicates of the same type.
-    // prevent u32::size_const() && u32::size_const() and similar things
     let fields = match &ast.data {
         syn::Data::Struct(data) => &data.fields,
         _ => panic!("Sendable can only be derived for structs"),
     };
+
+    let mut type_count: Vec<(Type, u32)> = Vec::new();
+    for field in fields {
+        let ty = &field.ty;
+        let type_name = format!("{}", quote! {#ty});
+        let mut found = false;
+        for (t, c) in &mut type_count {
+            let fmt_typename = format!("{}", quote! {#t});
+            if type_name == fmt_typename {
+                *c += 1;
+                found = true;
+                break;
+            }
+        }
+        if !found {
+            type_count.push((ty.clone(), 1));
+        }
+    }
+
     // Check that all fields implement Sendable.
     // TODO: Switch to a implementation that is not a dependency on static_assertions
-    let field_impl_check: TokenStream2 = fields
+    let field_impl_check: TokenStream2 = type_count
         .iter()
-        .map(|field| {
-            let ty = &field.ty;
+        .map(|(ty, _)| {
             quote! {
-                rsocks::__sa::assert_impl_all!(#ty: rsocks::Sendable);
+                const _: fn() = || {
+                    fn _assert_sendable<T: rsocks::Sendable>() {}
+                    _assert_sendable::<#ty>();
+                };
             }
         })
         .collect();
@@ -62,8 +84,8 @@ fn impl_sendable(ast: &syn::DeriveInput) -> proc_macro::TokenStream {
         })
         .collect();
     // Generate the size_const fn. (Check if all fields have a const size)
-    let dyn_size = fields.iter().map(|field| {
-        let ty = &field.ty;
+    let dyn_size = type_count.iter().map(|field| {
+        let ty = &field.0;
         quote! {
             <#ty as rsocks::Sendable>::size_const()
         }
