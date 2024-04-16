@@ -219,6 +219,58 @@ where
     }
 }
 
+macro_rules! impl_sendable_tuple {
+    ($($name:ident)+) => {
+        #[allow(non_snake_case)]
+        impl<$($name: Sendable,)*> Sendable for ($($name,)*) {
+            type Error = std::convert::Infallible;
+            fn size_const() -> bool {
+                true $( && $name::size_const() )*
+            }
+            fn size(&self) -> u32{
+                let ($(ref $name,)*) = *self;
+                let mut total = 0;
+                $(total += $name.size();)*
+                total
+            }
+
+            fn send(&self) -> Vec<u8> {
+                let ($(ref $name,)*) = *self;
+                let mut buf = Vec::new();
+                $(buf.extend($name.send());)*
+                buf
+            }
+
+            fn recv(reader: &mut dyn std::io::Read) -> Result<Self , Self::Error>{
+                Ok(($($name::recv(reader).unwrap(),)*))
+            }
+
+        }
+    };
+}
+// gross
+impl_sendable_tuple!(A);
+impl_sendable_tuple!(A B);
+impl_sendable_tuple!(A B C);
+impl_sendable_tuple!(A B C D);
+impl_sendable_tuple!(A B C D E);
+impl_sendable_tuple!(A B C D E F);
+impl_sendable_tuple!(A B C D E F G );
+impl_sendable_tuple!(A B C D E F G H );
+impl_sendable_tuple!(A B C D E F G H I);
+impl_sendable_tuple!(A B C D E F G H I J);
+impl_sendable_tuple!(A B C D E F G H I J K);
+impl_sendable_tuple!(A B C D E F G H I J K L);
+impl_sendable_tuple!(A B C D E F G H I J K L M);
+impl_sendable_tuple!(A B C D E F G H I J K L M N);
+impl_sendable_tuple!(A B C D E F G H I J K L M N O);
+impl_sendable_tuple!(A B C D E F G H I J K L M N O P);
+impl_sendable_tuple!(A B C D E F G H I J K L M N O P Q);
+impl_sendable_tuple!(A B C D E F G H I J K L M N O P Q R);
+impl_sendable_tuple!(A B C D E F G H I J K L M N O P Q R S);
+impl_sendable_tuple!(A B C D E F G H I J K L M N O P Q R S T);
+impl_sendable_tuple!(A B C D E F G H I J K L M N O P Q R S T U);
+
 #[cfg(test)]
 mod tests {
     //! Thank god for macros.
@@ -337,5 +389,14 @@ mod tests {
         let mut reader = std::io::Cursor::new(&data);
         let result = Box::<u32>::recv(&mut reader).unwrap();
         assert_eq!(value, result);
+    }
+
+    #[test]
+    fn test_tuple_send() {
+        let t = (1u32, 10.0, String::from("Hello, World!"), vec![1, 2, 3, 4]);
+        let data = t.send();
+        let mut reader = std::io::Cursor::new(data);
+        let recv: (u32, f64, String, Vec<i32>) = Sendable::recv(&mut reader).unwrap();
+        assert_eq!(t, recv);
     }
 }
