@@ -97,4 +97,16 @@ mod tests {
         assert!(p.position() == p.get_ref().len() as u64);
         assert_eq!(constructed, received);
     }
+
+    #[derive(rsocks_derive::Sendable, Debug, PartialEq)]
+    struct TupleTest(u32, u32);
+
+    #[test]
+    fn test_tuple() {
+        let test = TupleTest(1, 2);
+        let data = test.send();
+        let mut p = Cursor::new(data);
+        let test2 = TupleTest::recv(&mut p).unwrap();
+        assert_eq!(test, test2);
+    }
 }
