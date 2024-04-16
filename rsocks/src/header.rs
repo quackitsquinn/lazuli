@@ -1,5 +1,4 @@
 use std::{
-    any::{self, Any},
     convert::Infallible,
     hash::{DefaultHasher, Hash, Hasher},
     mem,
