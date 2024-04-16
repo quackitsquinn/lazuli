@@ -1,10 +1,11 @@
 use std::{
     any::{self, Any},
+    convert::Infallible,
     hash::{DefaultHasher, Hash, Hasher},
     mem,
 };
 
-use crate::hash_type_id;
+use crate::{hash_type_id, Sendable};
 
 const HEADER: [u8; 5] = *b"RSOCK";
 
@@ -20,7 +21,7 @@ const HEADER: [u8; 5] = *b"RSOCK";
 /// You can make an untyped PacketHeader by using `PacketHeader<UnknownType>`, but this is only intended for receiving packets.
 pub struct PacketHeader<T>
 where
-    T: 'static,
+    T: 'static + Sendable,
 {
     // should always be "RSOCK"
     header: [u8; 5],
@@ -36,9 +37,22 @@ where
 #[derive(Clone, Copy)]
 pub struct UnknownType;
 
+impl Sendable for UnknownType {
+    // literally nothing to send
+    type Error = Infallible;
+
+    fn send(&self) -> Vec<u8> {
+        Vec::new()
+    }
+
+    fn recv(data: &mut dyn std::io::Read) -> Result<Self, Self::Error> {
+        Ok(UnknownType)
+    }
+}
+
 impl<T> PacketHeader<T>
 where
-    T: 'static,
+    T: 'static + Sendable,
 {
     /// Creates a new PacketHeader with the type_id of T and the payload_size of T.
     pub fn auto() -> PacketHeader<T> {
@@ -103,7 +117,7 @@ impl PacketHeader<UnknownType> {
     /// # Safety
     /// The caller must ensure that the type_id and payload_size are correct.
     /// The caller must also ensure that the type T is the correct type.
-    pub unsafe fn into_ty<U: Copy>(self) -> PacketHeader<U> {
+    pub unsafe fn into_ty<U: Copy + Sendable>(self) -> PacketHeader<U> {
         assert_eq!(self.payload_size, std::mem::size_of::<U>() as u32);
         assert_eq!(self.type_id, hash_type_id::<U>());
 
@@ -160,12 +174,12 @@ mod tests {
 
     #[test]
     fn test_packet_header() {
-        let mut header: PacketHeader<[u8; 10]> = PacketHeader::auto();
-        let data = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+        let mut header: PacketHeader<u128> = PacketHeader::auto();
+        let data = 32u128.send();
         header.calculate_checksum(&data);
         let bytes = header.to_bytes();
         let new_header = PacketHeader::from_bytes(&bytes, &data).unwrap();
-        let ty_header = unsafe { new_header.into_ty::<[u8; 10]>() };
+        let ty_header = unsafe { new_header.into_ty::<u128>() };
         assert_eq!(header, ty_header);
     }
 
