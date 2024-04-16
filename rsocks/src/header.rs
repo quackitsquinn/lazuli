@@ -44,7 +44,7 @@ impl Sendable for UnknownType {
         Vec::new()
     }
 
-    fn recv(data: &mut dyn std::io::Read) -> Result<Self, Self::Error> {
+    fn recv(_: &mut dyn std::io::Read) -> Result<Self, Self::Error> {
         Ok(UnknownType)
     }
 }

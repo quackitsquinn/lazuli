@@ -1,5 +1,5 @@
 use proc_macro::TokenStream;
-use proc_macro2::{Span, TokenStream as TokenStream2};
+use proc_macro2::TokenStream as TokenStream2;
 
 use quote::{quote, ToTokens};
 use syn::{Data, Field, Ident, Index, Type};
@@ -197,9 +197,8 @@ fn generate_recv(input: &syn::DataStruct, name: &Ident) -> TokenStream2 {
                 .unnamed
                 .iter()
                 .enumerate()
-                .map(|(i, field)| {
+                .map(|(_, field)| {
                     let ty = &field.ty;
-                    let ident = Ident::new(&format!("field{}", i), Span::call_site());
                     quote! {
                         <#ty as rsocks::Sendable>::recv(data).unwrap(),
                     }
