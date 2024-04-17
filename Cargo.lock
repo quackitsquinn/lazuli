@@ -31,9 +31,6 @@ dependencies = [
 [[package]]
 name = "rsocks"
 version = "0.1.0"
-dependencies = [
- "static_assertions",
-]
 
 [[package]]
 name = "rsocks_derive"
