@@ -6,6 +6,7 @@ use std::{
 
 mod header;
 mod sendable;
+mod stream;
 
 /// Hashes the type_id of T.
 #[inline]
