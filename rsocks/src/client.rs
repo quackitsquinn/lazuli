@@ -14,6 +14,7 @@ struct Unknown(u8);
 // I don't know a better way to do this, but I'm sure there is one.
 struct StreamData {
     raw_data: ArcMutex<Vec<Unknown>>,
+    vec_ptr: ArcMutex<*mut Unknown>,
     size: usize,
     grew_by: ArcMutex<usize>,
     conversion_fn: fn(&mut dyn Read) -> Vec<u8>,
@@ -23,6 +24,7 @@ impl StreamData {
     fn new<T: 'static + Sendable>(stream: &Stream<T>) -> Self {
         StreamData {
             raw_data: unsafe { mem::transmute(stream.get_vec()) },
+            vec_ptr: unsafe { mem::transmute(stream.get_ptr()) },
             size: mem::size_of::<T>(),
             grew_by: stream.get_grow_by(),
             conversion_fn: T::as_conversion_fn(),
@@ -51,62 +53,58 @@ impl StreamData {
             data.len()
         );
         vec.append(&mut data);
-        mem::forget(vec);
+        *self.vec_ptr.lock().unwrap() = vec.as_mut_ptr() as *mut Unknown; // vec might move???
+        mem::forget(dbg!(vec));
+        // increment the grow by value by the amount of elements we added.
         *self.grew_by.lock().unwrap() += 1;
     }
 }
 
 pub struct TcpClient {
     socket: TcpStream,
-    /// So... Im stuck.
-    /// I need to store a hashmap of streams that all have different types.
-    /// I can't use a generic type because I need to store them in a hashmap, unless I do something hacky like this:
-    /// ```rust
-    /// let t: HashMap<u32, Stream<UnknownType>> = HashMap::new();
-    ///
-    /// fn add_stream<T: 'static>(&mut self, stream: Stream<T>) {
-    ///    let x = mem::transmute(stream);
-    ///   self.streams.insert(stream.get_type_id(), x);
-    /// }
-    ///
-    /// fn get_stream<T: 'static>(&mut self) -> Option<&mut Stream<T>> {
-    ///    let x = self.streams.get(&crate::hash_type_id::<T>())?;
-    ///   Some(mem::transmute(x))
-    /// }
-    /// ```
-    /// But this approach is *extremely* gross and I don't want to do it.
-    /// Anything that uses any type parameter or associated type will not work.
-    /// This approach has a few pitfalls:
-    /// - It's not type safe.
-    /// - I don't know how a vec will react to its type being changed to a ZST.
-    ///     - Theoretically, if we don't touch the stream without casting it back to its original type, it should be fine.
-    ///     - If this is what I do, I think the HashMap would have to be hidden inside a opaque type, so that the user can't access it.
-    ///
-    /// I've made a mistake. This bases on the hashmap being a `Hashmap<u32, Stream<Unknown>>`, but it should be `HashMap<u32, Vec<Unknown>>`.
-    /// I kinda doubt that you can dynamically transmute things to specific types, (as in like using a type id to get the type of the stream, and then transmuting it to that type).
-    /// Actually, its supposed to be `HashMap<u32, Arc<Mutex<Vec<Unknown>>>>`.
-    ///
-    /// I think this is a kinda ***big*** problem. I want to cast a type param while keeping the original type param's information.
-    /// I can't cast the type param back to add a new item to the stream, because we only have the type id.
-    /// You would have to have a type that can be dynamically sized, and then cast it to the type that you want.
-    /// Rust super does not do this.
-    /// You would have to store `T` somewhere, and then cast it back to `T` when you need to add a new item to the stream.
-    /// And like, machine code has no concept of types, so this would probably induce significant overhead.
-    ///
-    /// oh god. i have an idea.
-    ///
-    /// What if we take the underlying pointer the vec uses, and just use it to store the data?
-    /// Length and capacity would have to be handled, and you might have to do some *incredibly* weird things to get the data out of the vec.
-    /// We would have to store more information about each stream, like the size of the type, but this might work.
-    ///
-    streams: HashMap<u32, StreamData>,
-}
-#[test]
-fn test_vec_bs() {
-    let mut x: Vec<u8> = vec![0; 10];
+    // So... Im stuck.
+    // I need to store a hashmap of streams that all have different types.
+    // I can't use a generic type because I need to store them in a hashmap, unless I do something hacky like this:
+    // ```rust
+    // let t: HashMap<u32, Stream<UnknownType>> = HashMap::new();
+    //
+    // fn add_stream<T: 'static>(&mut self, stream: Stream<T>) {
+    //    let x = mem::transmute(stream);
+    //   self.streams.insert(stream.get_type_id(), x);
+    // }
+    //
+    // fn get_stream<T: 'static>(&mut self) -> Option<&mut Stream<T>> {
+    //    let x = self.streams.get(&crate::hash_type_id::<T>())?;
+    //   Some(mem::transmute(x))
+    // }
+    // ```
+    // But this approach is *extremely* gross and I don't want to do it.
+    // Anything that uses any type parameter or associated type will not work.
+    // This approach has a few pitfalls:
+    // - It's not type safe.
+    // - I don't know how a vec will react to its type being changed to a ZST.
+    //     - Theoretically, if we don't touch the stream without casting it back to its original type, it should be fine.
+    //     - If this is what I do, I think the HashMap would have to be hidden inside a opaque type, so that the user can't access it.
+    //
+    // I've made a mistake. This bases on the hashmap being a `Hashmap<u32, Stream<Unknown>>`, but it should be `HashMap<u32, Vec<Unknown>>`.
+    // I kinda doubt that you can dynamically transmute things to specific types, (as in like using a type id to get the type of the stream, and then transmuting it to that type).
+    // Actually, its supposed to be `HashMap<u32, Arc<Mutex<Vec<Unknown>>>>`.
+    //
+    // I think this is a kinda ***big*** problem. I want to cast a type param while keeping the original type param's information.
+    // I can't cast the type param back to add a new item to the stream, because we only have the type id.
+    // You would have to have a type that can be dynamically sized, and then cast it to the type that you want.
+    // Rust super does not do this.
+    // You would have to store `T` somewhere, and then cast it back to `T` when you need to add a new item to the stream.
+    // And like, machine code has no concept of types, so this would probably induce significant overhead.
+    //
+    // oh god. i have an idea.
+    //
+    // What if we take the underlying pointer the vec uses, and just use it to store the data?
+    // Length and capacity would have to be handled, and you might have to do some *incredibly* weird things to get the data out of the vec.
+    // We would have to store more information about each stream, like the size of the type, but this might work.
+    //
     // actually, this doesn't seem too bad... The unknown type might have to be a 1 byte type, but this seems like it could work.
     // You would also probably have to do like memcpy to get the data in the vec..
-    let ptr = x.as_mut_ptr();
     // assuming we don't touch the vec in **any** way where it could try to reallocate or something, this should work.
     // actually, we would have to grow the vec, so this wouldn't work.
     // we would have to do somthing kinda gross, (as if this isn't already gross) like this:
@@ -119,10 +117,56 @@ fn test_vec_bs() {
     // FLUFF THATS NOT EVEN THE BIGGEST ISSUE. How am i going to convert a Vec<u8> without knowing the type????
     // ok well wait that might not be that big of a deal.
     // along with the other data, store a vec that contains fn(Vec<u8>) -> Vec<u8> where the return is the layout in memory.
-    struct StreamData {
-        raw_data: ArcMutex<Vec<u8>>,
-        size: usize,
-        grew_by: ArcMutex<u8>,
-        conv_fn: fn(Vec<u8>) -> Vec<u8>,
+    // ok its "i took like a 30 minute break to think about this" me. I think I have a solution.
+    // I tested if telling a vec to reserve a certain amount of space would zero out the memory, and it doesn't.
+    // So you just essentially do this:
+    // 1. Take the vec's pointer, length, and capacity.
+    // 2. Create a new vec with the same pointer, length * size_of_type, and capacity * size_of_type. Make sure that this vec is a Vec<u8>.
+    // 3. Convert the data to a Vec<u8> and append it to the new vec.
+    //  - I accomplished this by just doing Vec::from_raw_parts(struct.as_mut_ptr() as *mut u8, mem::size_of::<T>(), mem::size_of::<T>() )
+    //  - The struct was contained in a leaked box, so it wasn't dropped.
+    // 4. Forget the new vec. This is EXTREMELY important, or else you will double free the data and crash everything.
+    streams: HashMap<u32, StreamData>,
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{client::StreamData, stream::Stream, Sendable};
+
+    #[test]
+    fn test_stream_data() {
+        let mut stream: Stream<u32> = Stream::new();
+        let mut data = StreamData::new(&stream);
+        unsafe { data.push(30u32.send()) };
+        assert_eq!(stream.get().unwrap(), 30);
+    }
+    struct TestStruct {
+        a: u32,
+        b: u32,
+    }
+
+    impl Sendable for TestStruct {
+        type Error = std::io::Error;
+        fn send(&self) -> Vec<u8> {
+            let mut buf = Vec::new();
+            buf.extend(self.a.send());
+            buf.extend(self.b.send());
+            buf
+        }
+        fn recv(data: &mut dyn std::io::prelude::Read) -> Result<Self, Self::Error> {
+            let a = u32::recv(data)?;
+            let b = u32::recv(data)?;
+            Ok(TestStruct { a, b })
+        }
+    }
+
+    #[test]
+    fn test_stream_data_struct() {
+        let mut stream: Stream<TestStruct> = Stream::new();
+        let mut data = StreamData::new(&stream);
+        unsafe { data.push(TestStruct { a: 30, b: 40 }.send()) };
+        let x = stream.get().unwrap();
+        assert_eq!(x.a, 30);
+        assert_eq!(x.b, 40);
     }
 }
