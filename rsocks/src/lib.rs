@@ -4,9 +4,12 @@ use std::{
     hash::{DefaultHasher, Hash, Hasher},
 };
 
+mod client;
 mod header;
 mod sendable;
 mod stream;
+
+pub(crate) type ArcMutex<T> = std::sync::Arc<std::sync::Mutex<T>>;
 
 /// Hashes the type_id of T.
 #[inline]

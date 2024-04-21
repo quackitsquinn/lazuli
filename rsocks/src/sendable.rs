@@ -1,4 +1,4 @@
-use std::io::Read;
+use std::{io::Read, mem};
 
 use crate::header::PacketHeader;
 
@@ -24,6 +24,21 @@ pub trait Sendable: Sized {
     fn send(&self) -> Vec<u8>;
     /// Converts an incoming stream of bytes to the type.
     fn recv(data: &mut dyn Read) -> Result<Self, Self::Error>;
+    /// Converts the type to a function that can be used to convert incoming data to the type.
+    /// Returns a Vec<u8> that is the type's representation in memory.
+    /// This is used as a hacky way to convert the type if the type cant be known at runtime.
+    fn as_conversion_fn() -> fn(&mut dyn Read) -> Vec<u8> {
+        |data| {
+            let mut conv = Box::new(Self::recv(data).unwrap());
+            unsafe {
+                Vec::from_raw_parts(
+                    Box::leak(conv) as *mut Self as *mut u8, // The memory will be managed by the Vec.
+                    mem::size_of::<Self>(),
+                    mem::size_of::<Self>(),
+                )
+            }
+        }
+    }
 }
 
 macro_rules! impl_sendable_number {

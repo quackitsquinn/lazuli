@@ -6,33 +6,45 @@ use std::{
 use crate::Sendable;
 
 /// A stream of data received from a socket.
-pub struct Stream<T>
-where
-    T: Sendable,
-{
+pub struct Stream<T> {
     data: Arc<Mutex<Vec<T>>>,
+    grow_by: Arc<Mutex<usize>>,
 }
 
 impl<T> Stream<T>
 where
-    T: Sendable + 'static,
+    T: 'static,
 {
     pub(crate) fn new() -> Self {
         Stream {
             data: Arc::new(Mutex::new(vec![])),
+            grow_by: Arc::new(Mutex::new(0)),
+        }
+    }
+
+    fn check_vec(&mut self) {
+        let mut grow_by = self.grow_by.lock().unwrap();
+        if *grow_by > 0 {
+            self.data.lock().unwrap().reserve(*grow_by);
+            *grow_by = 0;
         }
     }
     /// Gets one item from the stream.
     pub fn get(&mut self) -> Option<T> {
+        self.check_vec();
         self.data.lock().unwrap().pop()
     }
     /// Gets the count of items in the stream.
     pub fn len(&self) -> usize {
-        self.data.lock().unwrap().len()
+        self.data.lock().unwrap().len() + *self.grow_by.lock().unwrap()
     }
     /// Gets a pointer to the underlying buffer.
-    pub fn get_vec(&mut self) -> Arc<Mutex<Vec<T>>> {
+    pub fn get_vec(&self) -> Arc<Mutex<Vec<T>>> {
         self.data.clone()
+    }
+    /// Sets the amount of items to grow the buffer by.
+    pub(crate) fn get_grow_by(&self) -> Arc<Mutex<usize>> {
+        self.grow_by.clone()
     }
     /// Gets the type id of T
     pub(crate) fn get_type_id(self) -> u32 {
