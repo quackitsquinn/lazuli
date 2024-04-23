@@ -1,5 +1,5 @@
 use std::{
-    mem,
+    mem::{self, ManuallyDrop},
     rc::Rc,
     sync::{Arc, Mutex},
 };
@@ -9,7 +9,7 @@ use crate::Sendable;
 /// A stream of data received from a socket.
 pub struct Stream<T> {
     data: Arc<Mutex<Vec<T>>>,
-    grow_by: Arc<Mutex<usize>>,
+    grew: Arc<Mutex<usize>>,
     ptr: Arc<Mutex<*mut T>>,
 }
 
@@ -20,27 +20,29 @@ where
     pub(crate) fn new() -> Self {
         Stream {
             data: Arc::new(Mutex::new(vec![])),
-            grow_by: Arc::new(Mutex::new(0)),
+            grew: Arc::new(Mutex::new(0)),
             ptr: Arc::new(Mutex::new(std::ptr::null_mut())),
         }
     }
 
     fn check_vec(&mut self) {
-        let mut grow_by = self.grow_by.lock().unwrap();
-        println!("grow_by: {}", *grow_by);
-        if *grow_by > 0 {
+        let mut grew_by = self.grew.lock().unwrap();
+        // Check if the stream was given any data.
+        if *grew_by > 0 {
+            // Get the size and cap from the vector.
             let mut v = self.data.lock().unwrap();
-            let (ptr, len, cap) = (v.as_mut_ptr(), v.len() + *grow_by, v.capacity() + *grow_by);
-            println!("ptr: {:p}, len: {}, cap: {}", ptr, len, cap);
-            // Because the way data outside the capacity of a vec is handled and how it has 0 guarantee of being valid
-            // we need to do a Vec::from_raw_parts to ensure that the data is valid.
-            // I don't think this process is expensive at all (from what i can tell, its just basic pointer arithmetic)
-            let replaced = mem::replace(&mut *v, unsafe {
-                Vec::from_raw_parts(*self.ptr.lock().unwrap(), len, cap)
-            });
+            // Grabs the pointer to the vec that has the new elements.
+            let (ptr, len, cap) = (
+                *self.ptr.lock().unwrap(),
+                v.len() + *grew_by,
+                v.capacity() + *grew_by,
+            );
+            // Replace the old vec with a new one with correct values.
+            let replaced = mem::replace(&mut *v, unsafe { Vec::from_raw_parts(ptr, len, cap) });
             // We need to forget the replaced vec, or else we will double free the data.
-            mem::forget(replaced);
-            *grow_by = 0;
+            let _ = ManuallyDrop::new(replaced);
+            // Reset grew_by
+            *grew_by = 0;
         }
     }
     /// Gets one item from the stream.
@@ -50,7 +52,7 @@ where
     }
     /// Gets the count of items in the stream.
     pub fn len(&self) -> usize {
-        self.data.lock().unwrap().len() + *self.grow_by.lock().unwrap()
+        self.data.lock().unwrap().len() + *self.grew.lock().unwrap()
     }
     /// Gets a pointer to the underlying buffer.
     pub fn get_vec(&self) -> Arc<Mutex<Vec<T>>> {
@@ -61,7 +63,7 @@ where
     }
     /// Sets the amount of items to grow the buffer by.
     pub(crate) fn get_grow_by(&self) -> Arc<Mutex<usize>> {
-        self.grow_by.clone()
+        self.grew.clone()
     }
     /// Gets the type id of T
     pub(crate) fn get_type_id(self) -> u32 {
