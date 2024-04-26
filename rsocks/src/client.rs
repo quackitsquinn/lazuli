@@ -1,9 +1,9 @@
 use std::{
     any::Any,
     collections::HashMap,
-    io::Read,
+    io::{self, Read, Write},
     mem::{self, ManuallyDrop, MaybeUninit},
-    net::TcpStream,
+    net::{SocketAddr, TcpStream},
 };
 
 use crate::{stream::Stream, ArcMutex, Sendable};
@@ -78,11 +78,38 @@ pub struct TcpClient {
     streams: HashMap<u32, StreamData>,
 }
 
+impl TcpClient {
+    pub fn from_stream(stream: TcpStream) -> Self {
+        TcpClient {
+            socket: stream,
+            streams: Default::default(),
+        }
+    }
+    pub fn new(addr: SocketAddr) -> Result<TcpClient, io::Error> {
+        let stream = TcpStream::connect(addr)?;
+        Ok(Self::from_stream(stream))
+    }
+    /// Sends data to the socket.
+    #[inline]
+    pub fn send<T>(&mut self, data: &T) -> Result<(), io::Error>
+    where
+        T: Sendable + 'static,
+    {
+        let bytes = data.send();
+        let p_header = data.header();
+        self.socket.write_all(&p_header.to_bytes())?;
+        self.socket.write_all(&bytes)?;
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use std::convert::Infallible;
+    use std::{convert::Infallible, net::Ipv4Addr};
 
     use crate::{client::StreamData, stream::Stream, Sendable};
+
+    use super::TcpClient;
 
     #[test]
     fn test_stream_data() {
@@ -90,6 +117,14 @@ mod tests {
         let mut data = StreamData::new(&stream);
         unsafe { data.push(30u32.send()) };
         assert_eq!(stream.get().unwrap(), 30);
+    }
+
+    #[test]
+    fn test_send() {
+        let mut client =
+            TcpClient::new((Ipv4Addr::LOCALHOST, 13131).into()).expect("Unable to make socket");
+        client.send(&"sent data".to_owned()).unwrap();
+        client.send(&0xFFFFu16).unwrap();
     }
     struct TestStruct {
         a: u32,

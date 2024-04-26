@@ -5,6 +5,7 @@ use crate::header::PacketHeader;
 /// A trait for types that can be sent over the network.
 pub trait Sendable: Sized {
     type Error: std::error::Error;
+
     /// Returns the header of the packet.
     fn header(&self) -> PacketHeader<Self> {
         unsafe { PacketHeader::new(self.size()) }
