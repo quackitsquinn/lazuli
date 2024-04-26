@@ -75,7 +75,7 @@ fn impl_sendable(ast: &syn::DeriveInput) -> proc_macro::TokenStream {
     let dyn_size = type_count.iter().map(|field| {
         let ty = &field.0;
         quote! {
-            <#ty as rsocks::Sendable>::size_const()
+            <#ty as rsocks::Sendable>::SIZE_CONST
         }
     });
     // Generate the recv fn. (Deserialize each field from a dyn Read)
@@ -86,6 +86,7 @@ fn impl_sendable(ast: &syn::DeriveInput) -> proc_macro::TokenStream {
 
         impl rsocks::Sendable for #name {
             type Error = std::io::Error; // TODO: In the future, determine if impl types should just use anyhow::Error
+            const SIZE_CONST: bool = true #( && #dyn_size )*;
 
             fn size(&self) -> u32 {
                 let mut size = 0;
@@ -93,16 +94,16 @@ fn impl_sendable(ast: &syn::DeriveInput) -> proc_macro::TokenStream {
                 size
             }
 
-            fn size_const() -> bool {
-                static size_l: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-                *size_l.get_or_init(|| {
-                    let mut size = true;
-                    #(
-                        size &= #dyn_size;
-                    )*
-                    size
-                })
-            }
+            // fn size_const() -> bool {
+            //     static size_l: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+            //     *size_l.get_or_init(|| {
+            //         let mut size = true;
+            //         #(
+            //             size &= #dyn_size;
+            //         )*
+            //         size
+            //     })
+            // }
 
             fn send(&self) -> Vec<u8> {
                 let mut data = Vec::new();

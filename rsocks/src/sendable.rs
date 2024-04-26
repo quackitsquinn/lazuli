@@ -5,15 +5,10 @@ use crate::header::PacketHeader;
 /// A trait for types that can be sent over the network.
 pub trait Sendable: Sized {
     type Error: std::error::Error;
-
+    const SIZE_CONST: bool = true;
     /// Returns the header of the packet.
     fn header(&self) -> PacketHeader<Self> {
         unsafe { PacketHeader::new(self.size()) }
-    }
-    /// Returns whether the size of the type is constant.
-    /// This is used to determine if the type needs special handling.
-    fn size_const() -> bool {
-        true
     }
     /// Returns the size of the type.
     ///
@@ -46,6 +41,7 @@ macro_rules! impl_sendable_number {
     ($t:ty) => {
         impl Sendable for $t {
             type Error = std::io::Error;
+            const SIZE_CONST: bool = true;
             fn send(&self) -> Vec<u8> {
                 // Follow the standard of big-endian
                 <$t>::to_be_bytes(*self).to_vec()
@@ -72,6 +68,7 @@ impl_sendable_number!(f32, f64);
 
 impl Sendable for bool {
     type Error = std::io::Error;
+    const SIZE_CONST: bool = true;
 
     fn send(&self) -> Vec<u8> {
         if *self {
@@ -92,16 +89,13 @@ where
     T: Sendable,
 {
     type Error = T::Error;
+    const SIZE_CONST: bool = false;
     fn header(&self) -> PacketHeader<Self> {
         unsafe { PacketHeader::new(self.size()) }
     }
 
-    fn size_const() -> bool {
-        false
-    }
-
     fn size(&self) -> u32 {
-        if T::size_const() {
+        if T::SIZE_CONST {
             // Safety: We know that the size of the payload is constant, so we can calculate the size of the payload.
             (std::mem::size_of::<T>() * self.len() + 4) as u32 // Add 4 bytes for the length of the vector.
         } else {
@@ -135,14 +129,10 @@ where
 
 impl Sendable for String {
     type Error = std::io::Error;
+    const SIZE_CONST: bool = false;
     fn header(&self) -> PacketHeader<Self> {
         unsafe { PacketHeader::new(self.size()) }
     }
-
-    fn size_const() -> bool {
-        false
-    }
-
     fn size(&self) -> u32 {
         self.len() as u32 + 4 // Add 4 bytes for the length of the string.
     }
@@ -167,15 +157,12 @@ where
     T: Sendable,
 {
     type Error = T::Error;
+    const SIZE_CONST: bool = T::SIZE_CONST;
     fn header(&self) -> PacketHeader<Self> {
         match self {
             Some(value) => unsafe { PacketHeader::new(value.size() + 1) },
             None => unsafe { PacketHeader::new(1) },
         }
-    }
-
-    fn size_const() -> bool {
-        T::size_const()
     }
 
     fn size(&self) -> u32 {
@@ -214,12 +201,9 @@ where
     T: Sendable + Copy,
 {
     type Error = T::Error;
+    const SIZE_CONST: bool = T::SIZE_CONST;
     fn header(&self) -> PacketHeader<Self> {
         unsafe { PacketHeader::new(self.size()) }
-    }
-
-    fn size_const() -> bool {
-        T::size_const()
     }
 
     fn size(&self) -> u32 {
@@ -240,9 +224,7 @@ macro_rules! impl_sendable_tuple {
         #[allow(non_snake_case)]
         impl<$($name: Sendable,)*> Sendable for ($($name,)*) {
             type Error = std::convert::Infallible;
-            fn size_const() -> bool {
-                true $( && $name::size_const() )*
-            }
+            const SIZE_CONST: bool = true $( && $name::SIZE_CONST )*;
             fn size(&self) -> u32{
                 let ($(ref $name,)*) = *self;
                 let mut total = 0;
