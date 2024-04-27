@@ -85,7 +85,6 @@ fn impl_sendable(ast: &syn::DeriveInput) -> proc_macro::TokenStream {
         #field_impl_check // Check that all fields implement Sendable
 
         impl rsocks::Sendable for #name {
-            type Error = std::io::Error; // TODO: In the future, determine if impl types should just use anyhow::Error
             const SIZE_CONST: bool = true #( && #dyn_size )*;
 
             fn size(&self) -> u32 {
@@ -94,24 +93,13 @@ fn impl_sendable(ast: &syn::DeriveInput) -> proc_macro::TokenStream {
                 size
             }
 
-            // fn size_const() -> bool {
-            //     static size_l: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-            //     *size_l.get_or_init(|| {
-            //         let mut size = true;
-            //         #(
-            //             size &= #dyn_size;
-            //         )*
-            //         size
-            //     })
-            // }
-
             fn send(&self) -> Vec<u8> {
                 let mut data = Vec::new();
                 #send_gen
                 data
             }
 
-            fn recv(data: &mut dyn std::io::Read) -> Result<Self, Self::Error> {
+            fn recv(data: &mut dyn std::io::Read) -> Result<Self, ::std::io::Error> {
                 Ok(
                     #recv_gen
                 )
@@ -183,7 +171,7 @@ fn generate_recv(input: &syn::DataStruct, name: &Ident) -> TokenStream2 {
                     let ty = &field.ty;
                     let ident = field.ident.as_ref().unwrap();
                     quote! {
-                        #ident: <#ty as rsocks::Sendable>::recv(data).unwrap(),
+                        #ident: <#ty as rsocks::Sendable>::recv(data)?,
                     }
                 })
                 .collect();
@@ -201,7 +189,7 @@ fn generate_recv(input: &syn::DataStruct, name: &Ident) -> TokenStream2 {
                 .map(|(_, field)| {
                     let ty = &field.ty;
                     quote! {
-                        <#ty as rsocks::Sendable>::recv(data).unwrap(),
+                        <#ty as rsocks::Sendable>::recv(data)?,
                     }
                 })
                 .collect();

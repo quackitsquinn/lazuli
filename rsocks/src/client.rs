@@ -139,6 +139,7 @@ impl TcpClient {
 mod tests {
     use std::{
         convert::Infallible,
+        io,
         net::{Ipv4Addr, SocketAddr, TcpListener},
     };
 
@@ -185,7 +186,6 @@ mod tests {
     }
 
     impl Sendable for TestStruct {
-        type Error = std::io::Error;
         const SIZE_CONST: bool = true;
         fn send(&self) -> Vec<u8> {
             let mut buf = Vec::new();
@@ -193,7 +193,7 @@ mod tests {
             buf.extend(self.b.send());
             buf
         }
-        fn recv(data: &mut dyn std::io::prelude::Read) -> Result<Self, Self::Error> {
+        fn recv(data: &mut dyn std::io::prelude::Read) -> Result<Self, io::Error> {
             let a = u32::recv(data)?;
             let b = u32::recv(data)?;
             Ok(TestStruct { a, b })
@@ -212,13 +212,12 @@ mod tests {
     struct ZST;
     impl Sendable for ZST {
         const SIZE_CONST: bool = true;
-        type Error = Infallible;
 
         fn send(&self) -> Vec<u8> {
             vec![]
         }
 
-        fn recv(_: &mut dyn std::io::prelude::Read) -> Result<Self, Self::Error> {
+        fn recv(_: &mut dyn std::io::prelude::Read) -> Result<Self, io::Error> {
             Ok(ZST)
         }
     }

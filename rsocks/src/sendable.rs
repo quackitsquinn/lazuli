@@ -1,10 +1,12 @@
-use std::{io::Read, mem};
+use std::{
+    io::{self, Read},
+    mem,
+};
 
 use crate::header::PacketHeader;
 
 /// A trait for types that can be sent over the network.
 pub trait Sendable: Sized {
-    type Error: std::error::Error;
     const SIZE_CONST: bool = true;
     /// Returns the header of the packet.
     fn header(&self) -> PacketHeader<Self> {
@@ -19,7 +21,7 @@ pub trait Sendable: Sized {
     /// Converts the type to a Vec<u8> that can be sent over the network.
     fn send(&self) -> Vec<u8>;
     /// Converts an incoming stream of bytes to the type.
-    fn recv(data: &mut dyn Read) -> Result<Self, Self::Error>;
+    fn recv(data: &mut dyn Read) -> Result<Self, io::Error>;
     /// Converts the type to a function that can be used to convert incoming data to the type.
     /// Returns a Vec<u8> that is the type's representation in memory.
     /// This is used as a hacky way to convert the type if the type cant be known at runtime.
@@ -40,14 +42,13 @@ pub trait Sendable: Sized {
 macro_rules! impl_sendable_number {
     ($t:ty) => {
         impl Sendable for $t {
-            type Error = std::io::Error;
             const SIZE_CONST: bool = true;
             fn send(&self) -> Vec<u8> {
                 // Follow the standard of big-endian
                 <$t>::to_be_bytes(*self).to_vec()
             }
 
-            fn recv(data: &mut dyn Read,) -> Result<Self, Self::Error> {
+            fn recv(data: &mut dyn Read,) -> Result<Self, io::Error> {
                 let mut buffer = [0; std::mem::size_of::<$t>()];
                 data.read_exact(&mut buffer)?;
                 Ok(<$t>::from_be_bytes(buffer))
@@ -67,7 +68,6 @@ impl_sendable_number!(i8, i16, i32, i64, i128);
 impl_sendable_number!(f32, f64);
 
 impl Sendable for bool {
-    type Error = std::io::Error;
     const SIZE_CONST: bool = true;
 
     fn send(&self) -> Vec<u8> {
@@ -78,7 +78,7 @@ impl Sendable for bool {
         }
     }
 
-    fn recv(data: &mut dyn Read) -> Result<Self, Self::Error> {
+    fn recv(data: &mut dyn Read) -> Result<Self, io::Error> {
         let mut buffer = [0; 1];
         data.read_exact(&mut buffer)?;
         Ok(buffer[0] != 0)
@@ -88,7 +88,6 @@ impl<T> Sendable for Vec<T>
 where
     T: Sendable,
 {
-    type Error = T::Error;
     const SIZE_CONST: bool = false;
     fn header(&self) -> PacketHeader<Self> {
         unsafe { PacketHeader::new(self.size()) }
@@ -117,9 +116,9 @@ where
         data
     }
 
-    fn recv(data: &mut dyn Read) -> Result<Self, Self::Error> {
+    fn recv(data: &mut dyn Read) -> Result<Self, io::Error> {
         let mut vec = Vec::new();
-        let length = u32::recv(data).unwrap_or(0);
+        let length = u32::recv(data)?;
         for _ in 0..length {
             vec.push(T::recv(data)?);
         }
@@ -128,7 +127,6 @@ where
 }
 
 impl Sendable for String {
-    type Error = std::io::Error;
     const SIZE_CONST: bool = false;
     fn header(&self) -> PacketHeader<Self> {
         unsafe { PacketHeader::new(self.size()) }
@@ -144,8 +142,8 @@ impl Sendable for String {
         data
     }
 
-    fn recv(data: &mut dyn Read) -> Result<Self, Self::Error> {
-        let length = u32::recv(data).unwrap_or(0);
+    fn recv(data: &mut dyn Read) -> Result<Self, io::Error> {
+        let length = u32::recv(data)?;
         let mut buffer = vec![0; length as usize];
         data.read_exact(&mut buffer)?;
         Ok(String::from_utf8(buffer).unwrap())
@@ -156,7 +154,6 @@ impl<T> Sendable for Option<T>
 where
     T: Sendable,
 {
-    type Error = T::Error;
     const SIZE_CONST: bool = T::SIZE_CONST;
     fn header(&self) -> PacketHeader<Self> {
         match self {
@@ -186,7 +183,7 @@ where
         data
     }
 
-    fn recv(data: &mut dyn Read) -> Result<Self, Self::Error> {
+    fn recv(data: &mut dyn Read) -> Result<Self, io::Error> {
         let is_present = bool::recv(data).unwrap();
         if !is_present {
             Ok(None)
@@ -200,7 +197,6 @@ impl<T> Sendable for Box<T>
 where
     T: Sendable + Copy,
 {
-    type Error = T::Error;
     const SIZE_CONST: bool = T::SIZE_CONST;
     fn header(&self) -> PacketHeader<Self> {
         unsafe { PacketHeader::new(self.size()) }
@@ -214,7 +210,7 @@ where
         T::send(&**self)
     }
 
-    fn recv(data: &mut dyn Read) -> Result<Self, Self::Error> {
+    fn recv(data: &mut dyn Read) -> Result<Self, io::Error> {
         Ok(Box::new(T::recv(data)?))
     }
 }
@@ -223,7 +219,6 @@ macro_rules! impl_sendable_tuple {
     ($($name:ident)+) => {
         #[allow(non_snake_case)]
         impl<$($name: Sendable,)*> Sendable for ($($name,)*) {
-            type Error = std::convert::Infallible;
             const SIZE_CONST: bool = true $( && $name::SIZE_CONST )*;
             fn size(&self) -> u32{
                 let ($(ref $name,)*) = *self;
@@ -239,8 +234,8 @@ macro_rules! impl_sendable_tuple {
                 buf
             }
 
-            fn recv(reader: &mut dyn std::io::Read) -> Result<Self , Self::Error>{
-                Ok(($($name::recv(reader).unwrap(),)*))
+            fn recv(reader: &mut dyn std::io::Read) -> Result<Self , io::Error>{
+                Ok(($($name::recv(reader)?,)*))
             }
 
         }

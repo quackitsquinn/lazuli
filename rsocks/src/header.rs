@@ -1,7 +1,7 @@
 use std::{
     convert::Infallible,
     hash::{DefaultHasher, Hash, Hasher},
-    mem,
+    io, mem,
 };
 
 use crate::{hash_type_id, Sendable};
@@ -37,14 +37,11 @@ where
 pub struct UnknownType;
 
 impl Sendable for UnknownType {
-    // literally nothing to send
-    type Error = Infallible;
-
     fn send(&self) -> Vec<u8> {
         Vec::new()
     }
 
-    fn recv(_: &mut dyn std::io::Read) -> Result<Self, Self::Error> {
+    fn recv(_: &mut dyn std::io::Read) -> Result<Self, io::Error> {
         Ok(UnknownType)
     }
 }
