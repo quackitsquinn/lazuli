@@ -109,6 +109,10 @@ where
             bytes
         }
     }
+
+    pub fn id(&self) -> u32 {
+        self.type_id
+    }
 }
 
 impl PacketHeader<UnknownType> {

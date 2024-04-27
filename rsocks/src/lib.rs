@@ -1,8 +1,7 @@
 #![allow(dead_code)] // TODO: Remove when codebase is more mature
 #![deny(unsafe_op_in_unsafe_fn)]
 use std::{
-    any,
-    hash::{DefaultHasher, Hash, Hasher},
+    any, cell::Cell, hash::{DefaultHasher, Hash, Hasher}
 };
 
 mod client;

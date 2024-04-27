@@ -1,19 +1,20 @@
 use std::{
     any::Any,
     collections::HashMap,
+    fmt::Debug,
     io::{self, Read, Write},
     mem::{self, ManuallyDrop, MaybeUninit},
     net::{SocketAddr, TcpStream},
 };
 
-use crate::{stream::Stream, ArcMutex, Sendable};
+use crate::{hash_type_id, header, stream::Stream, ArcMutex, PacketHeader, Sendable, UnknownType};
 #[repr(transparent)]
 struct Unknown(u8);
 
 /// The various data required to store a stream.
-// TODO: This implementation is kinda clunky and relies on a lot of unsafe code.
-// I don't know a better way to do this, but I'm sure there is one.
-struct StreamData {
+/// More specifically, this un-types streams, while keeping some type information.
+/// This is used to store streams in a hashmap without knowing the type.
+struct StreamConnector {
     raw_data: ArcMutex<Vec<Unknown>>,
     vec_ptr: ArcMutex<*mut Unknown>,
     size: usize,
@@ -21,9 +22,9 @@ struct StreamData {
     conversion_fn: fn(&mut dyn Read) -> Vec<u8>,
 }
 
-impl StreamData {
+impl StreamConnector {
     fn new<T: 'static + Sendable>(stream: &Stream<T>) -> Self {
-        StreamData {
+        StreamConnector {
             raw_data: unsafe { mem::transmute(stream.get_vec()) },
             vec_ptr: unsafe { mem::transmute(stream.get_ptr()) },
             size: mem::size_of::<T>(),
@@ -75,7 +76,7 @@ impl StreamData {
 
 pub struct TcpClient {
     socket: TcpStream,
-    streams: HashMap<u32, StreamData>,
+    streams: HashMap<u32, StreamConnector>,
 }
 
 impl TcpClient {
@@ -93,28 +94,80 @@ impl TcpClient {
     #[inline]
     pub fn send<T>(&mut self, data: &T) -> Result<(), io::Error>
     where
-        T: Sendable + 'static,
+        T: Sendable + 'static + Debug,
     {
         let bytes = data.send();
-        let p_header = data.header();
+        let mut p_header = data.header();
+        p_header.calculate_checksum(&bytes);
         self.socket.write_all(&p_header.to_bytes())?;
         self.socket.write_all(&bytes)?;
         Ok(())
+    }
+    /// Receives data from the socket.
+    /// This is blocking, and for now, manual.
+    pub fn recv(&mut self) -> Result<(), io::Error> {
+        let mut buf: [u8; 20] = [0; mem::size_of::<PacketHeader<UnknownType>>()];
+        self.socket.read_exact(&mut buf)?;
+        let header = unsafe { PacketHeader::from_bytes_unchecked(&buf) };
+        let mut data: Vec<u8> = vec![0; header.payload_size as usize];
+        self.socket
+            .read_exact(&mut data[0..header.payload_size as usize])?;
+        if !header.verify_checksum(&data) {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "Checksum verification failed",
+            ));
+        }
+        if let Some(info) = self.streams.get_mut(&header.id()) {
+            unsafe { info.push(data) }
+        }
+        Ok(())
+    }
+
+    pub fn stream<T>(&mut self) -> Stream<T>
+    where
+        T: Sendable + 'static,
+    {
+        let stream: Stream<T> = Stream::new();
+        let info = StreamConnector::new(&stream);
+        self.streams.insert(hash_type_id::<T>(), info);
+        stream
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::{convert::Infallible, net::Ipv4Addr};
+    use std::{
+        convert::Infallible,
+        net::{Ipv4Addr, SocketAddr, TcpListener},
+    };
 
-    use crate::{client::StreamData, stream::Stream, Sendable};
+    use crate::{client::StreamConnector, stream::Stream, Sendable};
 
     use super::TcpClient;
+    /// Creates a client and server pair.
+    /// (client, server)
+    fn make_client_server_pair() -> (TcpClient, TcpClient) {
+        let server = TcpListener::bind::<SocketAddr>((Ipv4Addr::LOCALHOST, 13131).into())
+            .expect("Unable to make socket");
+        let client = TcpClient::new((Ipv4Addr::LOCALHOST, 13131).into());
+        let server = server.accept().unwrap().0;
+        (client.unwrap(), TcpClient::from_stream(server))
+    }
+
+    #[test]
+    fn test_send_recv() {
+        let (mut client, mut server) = make_client_server_pair();
+        let mut stream = client.stream::<u32>();
+        server.send(&30u32).unwrap();
+        client.recv().unwrap();
+        assert_eq!(stream.get().unwrap(), 30);
+    }
 
     #[test]
     fn test_stream_data() {
         let mut stream: Stream<u32> = Stream::new();
-        let mut data = StreamData::new(&stream);
+        let mut data = StreamConnector::new(&stream);
         unsafe { data.push(30u32.send()) };
         assert_eq!(stream.get().unwrap(), 30);
     }
@@ -150,7 +203,7 @@ mod tests {
     #[test]
     fn test_stream_data_struct() {
         let mut stream: Stream<TestStruct> = Stream::new();
-        let mut data = StreamData::new(&stream);
+        let mut data = StreamConnector::new(&stream);
         unsafe { data.push(TestStruct { a: 30, b: 40 }.send()) };
         let x = stream.get().unwrap();
         assert_eq!(x.a, 30);
@@ -172,7 +225,7 @@ mod tests {
     #[test]
     fn test_zst() {
         let mut stream: Stream<ZST> = Stream::new();
-        let mut data = StreamData::new(&stream);
+        let mut data = StreamConnector::new(&stream);
         unsafe { data.push(ZST.send()) }
         assert!(stream.get().is_some())
     }
