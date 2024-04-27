@@ -21,7 +21,6 @@ pub fn derive_sendable(input: TokenStream) -> TokenStream {
 fn impl_sendable(ast: &syn::DeriveInput) -> proc_macro::TokenStream {
     let name = &ast.ident;
     // Get the fields of the struct
-    // TODO: Handle tuple structs
     let fields = match &ast.data {
         syn::Data::Struct(data) => &data.fields,
         _ => panic!("Sendable can only be derived for structs"),
@@ -54,7 +53,6 @@ fn impl_sendable(ast: &syn::DeriveInput) -> proc_macro::TokenStream {
     }
 
     // Check that all fields implement Sendable.
-    // TODO: Switch to a implementation that is not a dependency on static_assertions
     let field_impl_check: TokenStream2 = type_count
         .iter()
         .map(|(ty, _)| {

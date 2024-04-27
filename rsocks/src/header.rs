@@ -1,5 +1,4 @@
 use std::{
-    convert::Infallible,
     hash::{DefaultHasher, Hash, Hasher},
     io, mem,
 };

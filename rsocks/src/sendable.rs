@@ -27,10 +27,10 @@ pub trait Sendable: Sized {
     /// This is used as a hacky way to convert the type if the type cant be known at runtime.
     fn as_conversion_fn() -> fn(&mut dyn Read) -> Vec<u8> {
         |data| {
-            let mut conv = Box::new(Self::recv(data).unwrap());
+            let conversion = Box::new(Self::recv(data).unwrap());
             unsafe {
                 Vec::from_raw_parts(
-                    Box::leak(conv) as *mut Self as *mut u8, // The memory will be managed by the Vec.
+                    Box::leak(conversion) as *mut Self as *mut u8, // The memory will be managed by the Vec.
                     mem::size_of::<Self>(),
                     mem::size_of::<Self>(),
                 )

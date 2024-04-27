@@ -1,10 +1,7 @@
 use std::{
     mem::{self, ManuallyDrop},
-    rc::Rc,
     sync::{Arc, Mutex},
 };
-
-use crate::Sendable;
 
 /// A stream of data received from a socket.
 pub struct Stream<T> {
@@ -77,7 +74,7 @@ mod test {
 
     #[test]
     fn test_new_stream() {
-        let mut t: Stream<u32> = Stream::new();
+        let t: Stream<u32> = Stream::new();
         assert_eq!(t.len(), 0);
     }
     #[test]

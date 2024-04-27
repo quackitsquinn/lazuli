@@ -1,13 +1,12 @@
 use std::{
-    any::Any,
     collections::HashMap,
     fmt::Debug,
     io::{self, Read, Write},
-    mem::{self, ManuallyDrop, MaybeUninit},
+    mem::{self, ManuallyDrop},
     net::{SocketAddr, TcpStream},
 };
 
-use crate::{hash_type_id, header, stream::Stream, ArcMutex, PacketHeader, Sendable, UnknownType};
+use crate::{hash_type_id, stream::Stream, ArcMutex, PacketHeader, Sendable, UnknownType};
 #[repr(transparent)]
 struct Unknown(u8);
 
@@ -138,7 +137,6 @@ impl TcpClient {
 #[cfg(test)]
 mod tests {
     use std::{
-        convert::Infallible,
         io,
         net::{Ipv4Addr, SocketAddr, TcpListener},
     };

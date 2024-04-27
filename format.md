@@ -61,6 +61,6 @@ struct RawPacket {
 - [x] Basic TCP communication
 - [x] Communication without serialization
 - [x] Cross platform support
-- [ ] Pointer based data structures (vec, str, etc) (This is planned to be supported in the future)
+- [x] Pointer based data structures (vec, str, etc) (This is planned to be supported in the future)
   - This would be done by having custom serialization and deserialization functions for each data structure
 - [ ] Cross language support (not planned)

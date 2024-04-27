@@ -1,13 +1,15 @@
 #![allow(dead_code)] // TODO: Remove when codebase is more mature
 #![deny(unsafe_op_in_unsafe_fn)]
 use std::{
-    any, cell::Cell, hash::{DefaultHasher, Hash, Hasher}
+    any,
+    hash::{DefaultHasher, Hash, Hasher},
 };
 
 mod client;
-mod header;
+pub mod header;
 mod sendable;
 mod stream;
+
 /// An Arc of a Mutex.
 pub(crate) type ArcMutex<T> = std::sync::Arc<std::sync::Mutex<T>>;
 
@@ -19,5 +21,6 @@ fn hash_type_id<T: 'static>() -> u32 {
     hasher.finish() as u32
 }
 
-pub use header::*;
+pub use client::TcpClient;
+pub(crate) use header::*;
 pub use sendable::Sendable;
