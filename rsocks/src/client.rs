@@ -85,8 +85,8 @@ impl TcpClient {
             streams: Default::default(),
         }
     }
-    pub fn new(addr: SocketAddr) -> Result<TcpClient, io::Error> {
-        let stream = TcpStream::connect(addr)?;
+    pub fn new<T: Into<SocketAddr>>(addr: T) -> Result<TcpClient, io::Error> {
+        let stream = TcpStream::connect(addr.into())?;
         Ok(Self::from_stream(stream))
     }
     /// Sends data to the socket.
@@ -149,7 +149,7 @@ mod tests {
     fn make_client_server_pair() -> (TcpClient, TcpClient) {
         let server = TcpListener::bind::<SocketAddr>((Ipv4Addr::LOCALHOST, 13131).into())
             .expect("Unable to make socket");
-        let client = TcpClient::new((Ipv4Addr::LOCALHOST, 13131).into());
+        let client = TcpClient::new((Ipv4Addr::LOCALHOST, 13131));
         let server = server.accept().unwrap().0;
         (client.unwrap(), TcpClient::from_stream(server))
     }
