@@ -392,4 +392,15 @@ mod tests {
         let recv: (u32, f64, String, Vec<i32>) = Sendable::recv(&mut reader).unwrap();
         assert_eq!(t, recv);
     }
+    #[test]
+    fn test_recursive_tuple_send() {
+        let init = (1, 2);
+        let init1 = (init, init);
+        let send = (init1, init1);
+        let data = send.send();
+        let mut reader = std::io::Cursor::new(data);
+        let recv: (((i32, i32), (i32, i32)), ((i32, i32), (i32, i32))) =
+            Sendable::recv(&mut reader).unwrap();
+        assert_eq!(send, recv);
+    }
 }
