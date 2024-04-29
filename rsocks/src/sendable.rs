@@ -264,6 +264,21 @@ impl_sendable_tuple!(A B C D E F G H I J K L M N O P Q R S);
 impl_sendable_tuple!(A B C D E F G H I J K L M N O P Q R S T);
 impl_sendable_tuple!(A B C D E F G H I J K L M N O P Q R S T U);
 
+impl Sendable for () {
+    const SIZE_CONST: bool = true;
+    fn size(&self) -> u32 {
+        0
+    }
+
+    fn send(&self) -> Vec<u8> {
+        Vec::new()
+    }
+
+    fn recv(_reader: &mut dyn std::io::Read) -> Result<Self, io::Error> {
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     //! Thank god for macros.
