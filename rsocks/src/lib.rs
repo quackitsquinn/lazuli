@@ -14,6 +14,7 @@ mod stream;
 pub(crate) type ArcMutex<T> = std::sync::Arc<std::sync::Mutex<T>>;
 
 /// Hashes the type_id of T.
+// TODO: After some performance testing, determine if this should just be converted into a mem::transmute::<u128>(TypeId::of::<T>) or something similar.
 #[inline]
 fn hash_type_id<T: 'static>() -> u32 {
     let mut hasher = DefaultHasher::new();
