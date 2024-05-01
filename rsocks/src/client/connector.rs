@@ -74,6 +74,10 @@ impl StreamConnector {
         *self.grew.lock().unwrap() += 1;
     }
 }
+/// TODO: figure out if this is *actually* safe.
+/// Im fairly certain mostly everything in StreamConnector is locked behind an ArcMutex, so it should be safe.
+unsafe impl Send for StreamConnector {}
+unsafe impl Sync for StreamConnector {}
 
 #[cfg(test)]
 mod tests {

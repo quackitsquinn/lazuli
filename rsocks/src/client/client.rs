@@ -1,33 +1,50 @@
 use std::{
-    collections::HashMap,
     fmt::Debug,
     io::{self, Read, Write},
     mem,
-    net::{SocketAddr, TcpStream, ToSocketAddrs},
+    net::{TcpStream, ToSocketAddrs},
+    sync::{Arc, Mutex},
 };
 
-use crate::{hash_type_id, stream::Stream, PacketHeader, Sendable, UnknownType};
+use crate::{hash_type_id, stream::Stream, ArcMutex, PacketHeader, Sendable, UnknownType};
 
-use super::connector::StreamConnector;
+use super::{connector::StreamConnector, listener::SocketListener, StreamCollection};
 
 pub struct TcpClient {
-    socket: TcpStream,
-    streams: HashMap<u32, StreamConnector>,
+    socket: ArcMutex<TcpStream>,
+    streams: ArcMutex<StreamCollection>,
+    listener: Option<SocketListener>,
 }
 
 impl TcpClient {
     pub fn from_stream(stream: TcpStream) -> Self {
         TcpClient {
+            socket: Arc::new(Mutex::new(stream)),
+            streams: Default::default(),
+            listener: None,
+        }
+    }
+
+    pub fn from_arcmutex_socket(stream: ArcMutex<TcpStream>) -> Self {
+        TcpClient {
             socket: stream,
             streams: Default::default(),
+            listener: None,
         }
+    }
+
+    pub(crate) fn with_streams(mut self, streams: ArcMutex<StreamCollection>) -> Self {
+        self.streams = streams;
+        self
     }
 
     pub fn new<T: ToSocketAddrs>(addr: T) -> Result<TcpClient, io::Error> {
         let stream = addr.to_socket_addrs()?;
         for addr in stream {
             match TcpStream::connect(addr) {
-                Ok(stream) => return Ok(Self::from_stream(stream)),
+                Ok(stream) => {
+                    return Ok(Self::from_stream(stream));
+                }
                 Err(_) => continue,
             }
         }
@@ -46,26 +63,27 @@ impl TcpClient {
         let bytes = data.send();
         let mut p_header = data.header();
         p_header.calculate_checksum(&bytes);
-        self.socket.write_all(&p_header.to_bytes())?;
-        self.socket.write_all(&bytes)?;
+        let mut socket = self.socket.lock().unwrap();
+        socket.write_all(&p_header.to_bytes())?;
+        socket.write_all(&bytes)?;
         Ok(())
     }
     /// Receives data from the socket.
     /// This is blocking, and for now, manual.
     pub fn recv(&mut self) -> Result<(), io::Error> {
         let mut buf: [u8; 20] = [0; mem::size_of::<PacketHeader<UnknownType>>()];
-        self.socket.read_exact(&mut buf)?;
+        let mut socket = self.socket.lock().unwrap();
+        socket.read_exact(&mut buf)?;
         let header = unsafe { PacketHeader::from_bytes_unchecked(&buf) };
         let mut data: Vec<u8> = vec![0; header.payload_size as usize];
-        self.socket
-            .read_exact(&mut data[0..header.payload_size as usize])?;
+        socket.read_exact(&mut data[0..header.payload_size as usize])?;
         if !header.verify_checksum(&data) {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
                 "Checksum verification failed",
             ));
         }
-        if let Some(info) = self.streams.get_mut(&header.id()) {
+        if let Some(info) = self.streams.lock().unwrap().get_mut(&header.id()) {
             unsafe { info.push(data) }
         }
         Ok(())
@@ -77,8 +95,24 @@ impl TcpClient {
     {
         let stream: Stream<T> = Stream::new();
         let info = StreamConnector::new(&stream);
-        self.streams.insert(hash_type_id::<T>(), info);
+        self.streams
+            .lock()
+            .unwrap()
+            .insert(hash_type_id::<T>(), info);
         stream
+    }
+
+    pub fn listen(&mut self) {
+        let mut listener = SocketListener::new(self.socket.clone(), self.streams.clone());
+        self.listener = Some(listener);
+        self.listener.as_mut().unwrap().run();
+    }
+
+    pub fn stop_listening(&mut self) {
+        if let Some(listener) = &mut self.listener {
+            println!("Stopping listener...");
+            listener.stop().unwrap();
+        }
     }
 }
 
@@ -91,24 +125,9 @@ mod tests {
         time::Duration,
     };
 
-    use crate::{stream::Stream, Sendable};
+    use crate::{client::test_utils::make_client_server_pair, stream::Stream, Sendable};
 
     use super::{StreamConnector, TcpClient};
-
-    static PORTS: [u16; 3] = [13131, 13132, 13133];
-    static ADDRESSES: [SocketAddr; 3] = [
-        SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), PORTS[0]),
-        SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), PORTS[1]),
-        SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), PORTS[2]),
-    ];
-    /// Creates a client and server pair.
-    /// (client, server)
-    fn make_client_server_pair() -> (TcpClient, TcpClient) {
-        let server = TcpListener::bind(ADDRESSES.as_slice()).expect("Unable to make socket");
-        let client = TcpClient::new(server.local_addr().unwrap());
-        let server = server.accept().unwrap().0;
-        (client.unwrap(), TcpClient::from_stream(server))
-    }
 
     #[test]
     fn test_send_recv() {
@@ -120,6 +139,7 @@ mod tests {
     }
     // Believe it or not, commenting out failing tests is bad practice.
     // It's fine here though, as this is a debug test which requires an already hosted server.
+
     // #[test]
     // fn test_send() {
     //     let mut client =

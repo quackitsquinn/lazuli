@@ -4,6 +4,7 @@ use std::{
 };
 
 /// A stream of data received from a socket.
+#[derive(Debug)]
 pub struct Stream<T> {
     data: Arc<Mutex<Vec<T>>>,
     grew: Arc<Mutex<usize>>,
