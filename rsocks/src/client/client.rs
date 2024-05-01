@@ -3,7 +3,7 @@ use std::{
     fmt::Debug,
     io::{self, Read, Write},
     mem,
-    net::{SocketAddr, TcpStream},
+    net::{SocketAddr, TcpStream, ToSocketAddrs},
 };
 
 use crate::{hash_type_id, stream::Stream, PacketHeader, Sendable, UnknownType};
@@ -22,15 +22,12 @@ impl TcpClient {
             streams: Default::default(),
         }
     }
-    pub fn new<T: Into<SocketAddr>>(addr: T) -> Result<TcpClient, io::Error> {
-        let stream = TcpStream::connect(addr.into())?;
-        Ok(Self::from_stream(stream))
-    }
 
-    pub fn new_list<T: Into<SocketAddr>>(addrs: Vec<T>) -> Result<(TcpClient, u16), io::Error> {
-        for (i, addr) in addrs.into_iter().map(|t| t.into()).enumerate() {
+    pub fn new<T: ToSocketAddrs>(addr: T) -> Result<TcpClient, io::Error> {
+        let stream = addr.to_socket_addrs()?;
+        for addr in stream {
             match TcpStream::connect(addr) {
-                Ok(stream) => return Ok((Self::from_stream(stream), i as u16)),
+                Ok(stream) => return Ok(Self::from_stream(stream)),
                 Err(_) => continue,
             }
         }
@@ -39,6 +36,7 @@ impl TcpClient {
             "No available addresses",
         ))
     }
+
     /// Sends data to the socket.
     #[inline]
     pub fn send<T>(&mut self, data: &T) -> Result<(), io::Error>
@@ -98,7 +96,7 @@ mod tests {
     use super::{StreamConnector, TcpClient};
 
     static PORTS: [u16; 3] = [13131, 13132, 13133];
-    static ADDRS: [SocketAddr; 3] = [
+    static ADDRESSES: [SocketAddr; 3] = [
         SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), PORTS[0]),
         SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), PORTS[1]),
         SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), PORTS[2]),
@@ -106,7 +104,7 @@ mod tests {
     /// Creates a client and server pair.
     /// (client, server)
     fn make_client_server_pair() -> (TcpClient, TcpClient) {
-        let server = TcpListener::bind(ADDRS.as_slice()).expect("Unable to make socket");
+        let server = TcpListener::bind(ADDRESSES.as_slice()).expect("Unable to make socket");
         let client = TcpClient::new(server.local_addr().unwrap());
         let server = server.accept().unwrap().0;
         (client.unwrap(), TcpClient::from_stream(server))
