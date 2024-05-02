@@ -8,7 +8,10 @@ pub use client::TcpClient;
 
 #[cfg(test)]
 mod test_utils {
-    use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+    use std::{
+        io::{Read, Write},
+        net::{IpAddr, Ipv4Addr, SocketAddr, TcpStream},
+    };
 
     use super::*;
     static PORTS: [u16; 3] = [13131, 13132, 13133];
@@ -23,8 +26,10 @@ mod test_utils {
     pub(super) fn make_client_server_pair() -> (TcpClient, TcpClient) {
         use std::net::TcpListener;
         let server = TcpListener::bind(ADDRESSES.as_slice()).expect("Unable to make socket");
-        let client = TcpClient::new(server.local_addr().unwrap());
+
+        let client = TcpClient::new(server.local_addr().unwrap()).unwrap();
         let server = server.accept().unwrap().0;
-        (client.unwrap(), TcpClient::from_stream(server))
+
+        (client, TcpClient::from_stream(server))
     }
 }

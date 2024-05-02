@@ -74,9 +74,28 @@ impl TcpClient {
         let mut buf: [u8; 20] = [0; mem::size_of::<PacketHeader<UnknownType>>()];
         let mut socket = self.socket.lock().unwrap();
         socket.read_exact(&mut buf)?;
+        //dbg!("wijbnqewpiurnvqewpiovq");
         let header = unsafe { PacketHeader::from_bytes_unchecked(&buf) };
         let mut data: Vec<u8> = vec![0; header.payload_size as usize];
+        // yeah ok it's this read_exact call.
+        // ok i think i know whats happening.
+        // this read_exact call is unable to read the data, forcing the fn to return an error.
+        // then the fn is called again, with non header data, and it attempts to parse the payload as a header.
+        // if the type is small, it returns at the first read_exact call. (if the sent data is bigger than mem::size_of::<PacketHeader>())
+        // if the type is big, it will probably panic at PacketHeader::from_bytes_unchecked, because the RSOCK header is almost certainly not there.
+        // I think a maybe solution is to figure out how to loop the read_exact call until it reads all the data.
+        // I don't know how it would handle shutting down the socket though, as it would just hang forever.
+        // i mean ok, my original idea was to abstract this method into a function that you just give some params to.
+        // i didn't do it because i figured the other way would be easier. guess who was wrong.
+        // this would probably explain why the weird debug statement was fixing the issue.
+        // god threading is a mess sometimes.
+        // TODO: fix this awful issue by abstracting this code. Use a modified version of the abstracted code in the listener.
+        // Abstracting is probably a good idea for the long-run as well.
+        // also in the future, this fn will probably intentionally not work if there is an active listener.
+        // The reason this happened was because the listener was in non-blocking mode, and the socket was blocking.
+        // This can have special code to handle it, but that code is for the listener.
         socket.read_exact(&mut data[0..header.payload_size as usize])?;
+        println!("Received header: {:?}", buf);
         if !header.verify_checksum(&data) {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
@@ -84,7 +103,10 @@ impl TcpClient {
             ));
         }
         if let Some(info) = self.streams.lock().unwrap().get_mut(&header.id()) {
+            println!("Stream found for id: {}", header.id());
             unsafe { info.push(data) }
+        } else {
+            eprintln!("No stream found for id: {}", header.id());
         }
         Ok(())
     }

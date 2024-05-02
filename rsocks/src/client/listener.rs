@@ -3,6 +3,7 @@ use std::{
     io::{self, stdout, Write},
     net::TcpStream,
     sync::{atomic::AtomicBool, Arc},
+    time::Duration,
 };
 
 use crate::{ArcMutex, TcpClient};
@@ -45,18 +46,11 @@ impl SocketListener {
     ) -> Result<(), io::Error> {
         let mut client =
             TcpClient::from_arcmutex_socket(socket.clone()).with_streams(streams.clone());
-        while !dbg!(should_close.load(std::sync::atomic::Ordering::Acquire)) {
+        while !should_close.load(std::sync::atomic::Ordering::Acquire) {
             match client.recv() {
-                Ok(_) => {
-                    println!("Received data.");
-                    stdout().flush().unwrap();
-                }
+                Ok(_) => {}
                 Err(err) => {
-                    if err.kind() == std::io::ErrorKind::WouldBlock
-                        || err.kind() == std::io::ErrorKind::UnexpectedEof
-                    {
-                        print!("-");
-                        stdout().flush().unwrap();
+                    if err.kind() == std::io::ErrorKind::WouldBlock {
                         continue;
                     } else {
                         return Err(err);
@@ -64,8 +58,7 @@ impl SocketListener {
                 }
             }
         }
-        //println!("Closing listener...");
-        //stdout().flush().unwrap();
+
         Ok(())
     }
     pub fn error(&self) -> Option<io::Error> {
@@ -78,10 +71,8 @@ impl SocketListener {
     }
 
     pub fn stop(&mut self) -> Result<(), io::Error> {
-        println!("Storing should_close...");
         self.should_close
             .store(true, std::sync::atomic::Ordering::Release);
-        println!("Joining thread...");
         self.thread.take().unwrap().join().unwrap()
     }
 }
@@ -89,7 +80,7 @@ impl SocketListener {
 impl Drop for SocketListener {
     fn drop(&mut self) {
         if self.thread.is_some() {
-            self.stop();
+            let _ = self.stop();
         }
     }
 }
@@ -103,16 +94,22 @@ mod tests {
     #[test]
     fn test_listener() {
         let (mut client, mut server) = make_client_server_pair();
-        let mut stream: Stream<String> = client.stream();
+        let mut stream: Stream<u32> = client.stream();
         client.listen();
-        println!("Listening...");
-        server.send(&"Hello, world!".to_string()).unwrap();
-        println!("Sent data.");
-        thread::sleep(Duration::from_secs_f32(0.5));
-        println!("Receiving data... (closing listener)");
-        client.stop_listening();
-        let input = stream.get().unwrap();
-        println!("Received data: {}", input);
-        assert_eq!(input, "Hello, world!");
+        println!("Sending data...");
+        server.send(&32u32).unwrap();
+
+        let mut i = 0;
+        let mut res = None;
+        while res.is_none() {
+            println!("Waiting for data...");
+            thread::sleep(Duration::from_millis(100));
+            if i > 100 {
+                panic!("Stream did not receive data in time.");
+            }
+            i += 1;
+            res = stream.get();
+        }
+        assert_eq!(res.unwrap(), 32);
     }
 }
