@@ -1,5 +1,6 @@
 mod client;
 mod connector;
+mod input;
 mod listener;
 
 pub(self) type StreamCollection = std::collections::HashMap<u32, connector::StreamConnector>;
