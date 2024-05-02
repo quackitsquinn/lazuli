@@ -3,7 +3,7 @@ use std::{
     io, mem,
 };
 
-use crate::{hash_type_id, Sendable};
+use crate::{hash_type_id, IOResult, Sendable};
 
 const HEADER: [u8; 5] = *b"RSOCK";
 
@@ -40,7 +40,7 @@ impl Sendable for UnknownType {
         Vec::new()
     }
 
-    fn recv(_: &mut dyn std::io::Read) -> Result<Self, io::Error> {
+    fn recv(_: &mut dyn std::io::Read) -> IOResult<Self> {
         Ok(UnknownType)
     }
 }

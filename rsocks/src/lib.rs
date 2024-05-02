@@ -13,7 +13,7 @@ mod stream;
 /// An Arc of a Mutex.
 pub(crate) type ArcMutex<T> = std::sync::Arc<std::sync::Mutex<T>>;
 /// A Result type that returns an io::Error. We use io::Error throughout the library because it is the most fitting error type for this library.
-pub type Result<T> = std::result::Result<T, std::io::Error>;
+pub type IOResult<T> = std::result::Result<T, std::io::Error>;
 
 /// Hashes the type_id of T.
 // TODO: After some performance testing, determine if this should just be converted into a mem::transmute::<u128>(TypeId::of::<T>) or something similar.

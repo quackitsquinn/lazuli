@@ -6,14 +6,14 @@ use std::{
     time::Duration,
 };
 
-use crate::{ArcMutex, TcpClient};
+use crate::{ArcMutex, IOResult, TcpClient};
 
 use super::StreamCollection;
 
 pub struct SocketListener {
     socket: ArcMutex<TcpStream>,
     streams: ArcMutex<StreamCollection>,
-    thread: Option<std::thread::JoinHandle<Result<(), io::Error>>>,
+    thread: Option<std::thread::JoinHandle<IOResult<()>>>,
     should_close: Arc<AtomicBool>,
     error: Option<io::Error>,
 }
@@ -28,7 +28,7 @@ impl SocketListener {
             error: None,
         }
     }
-    pub fn run(&mut self) -> Result<(), io::Error> {
+    pub fn run(&mut self) -> IOResult<()> {
         let run = self.should_close.clone();
         let socket = self.socket.clone();
         // Set the socket to non-blocking mode. This is EXTREMELY important for the listener to work.
@@ -43,7 +43,7 @@ impl SocketListener {
         should_close: Arc<AtomicBool>,
         socket: ArcMutex<TcpStream>,
         streams: ArcMutex<StreamCollection>,
-    ) -> Result<(), io::Error> {
+    ) -> IOResult<()> {
         let mut client =
             TcpClient::from_arcmutex_socket(socket.clone()).with_streams(streams.clone());
         while !should_close.load(std::sync::atomic::Ordering::Acquire) {
@@ -70,7 +70,7 @@ impl SocketListener {
         }
     }
 
-    pub fn stop(&mut self) -> Result<(), io::Error> {
+    pub fn stop(&mut self) -> IOResult<()> {
         self.should_close
             .store(true, std::sync::atomic::Ordering::Release);
         self.thread.take().unwrap().join().unwrap()

@@ -6,7 +6,9 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use crate::{hash_type_id, stream::Stream, ArcMutex, PacketHeader, Sendable, UnknownType};
+use crate::{
+    hash_type_id, stream::Stream, ArcMutex, IOResult, PacketHeader, Sendable, UnknownType,
+};
 
 use super::{connector::StreamConnector, listener::SocketListener, StreamCollection};
 
@@ -38,7 +40,7 @@ impl TcpClient {
         self
     }
 
-    pub fn new<T: ToSocketAddrs>(addr: T) -> Result<TcpClient, io::Error> {
+    pub fn new<T: ToSocketAddrs>(addr: T) -> IOResult<TcpClient> {
         let stream = addr.to_socket_addrs()?;
         for addr in stream {
             match TcpStream::connect(addr) {
@@ -56,7 +58,7 @@ impl TcpClient {
 
     /// Sends data to the socket.
     #[inline]
-    pub fn send<T>(&mut self, data: &T) -> Result<(), io::Error>
+    pub fn send<T>(&mut self, data: &T) -> IOResult<()>
     where
         T: Sendable + 'static + Debug,
     {
@@ -70,7 +72,7 @@ impl TcpClient {
     }
     /// Receives data from the socket.
     /// This is blocking, and for now, manual.
-    pub fn recv(&mut self) -> Result<(), io::Error> {
+    pub fn recv(&mut self) -> IOResult<()> {
         let mut buf: [u8; 20] = [0; mem::size_of::<PacketHeader<UnknownType>>()];
         let mut socket = self.socket.lock().unwrap();
         socket.read_exact(&mut buf)?;
@@ -147,7 +149,7 @@ mod tests {
         time::Duration,
     };
 
-    use crate::{client::test_utils::make_client_server_pair, stream::Stream, Sendable};
+    use crate::{client::test_utils::make_client_server_pair, stream::Stream, IOResult, Sendable};
 
     use super::{StreamConnector, TcpClient};
 
@@ -186,7 +188,7 @@ mod tests {
             buf.extend(self.b.send());
             buf
         }
-        fn recv(data: &mut dyn std::io::prelude::Read) -> Result<Self, io::Error> {
+        fn recv(data: &mut dyn std::io::prelude::Read) -> IOResult<Self> {
             let a = u32::recv(data)?;
             let b = u32::recv(data)?;
             Ok(TestStruct { a, b })

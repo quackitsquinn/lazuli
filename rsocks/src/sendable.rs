@@ -4,6 +4,7 @@ use std::{
 };
 
 use crate::header::PacketHeader;
+use crate::IOResult;
 
 /// A trait for types that can be sent over the network.
 pub trait Sendable: Sized {
@@ -21,7 +22,7 @@ pub trait Sendable: Sized {
     /// Converts the type to a Vec<u8> that can be sent over the network.
     fn send(&self) -> Vec<u8>;
     /// Converts an incoming stream of bytes to the type.
-    fn recv(data: &mut dyn Read) -> Result<Self, io::Error>;
+    fn recv(data: &mut dyn Read) -> IOResult<Self>;
     /// Converts the type to a function that can be used to convert incoming data to the type.
     /// Returns a Vec<u8> that is the type's representation in memory.
     /// This is used as a hacky way to convert the type if the type cant be known at runtime.
@@ -48,7 +49,7 @@ macro_rules! impl_sendable_number {
                 <$t>::to_be_bytes(*self).to_vec()
             }
 
-            fn recv(data: &mut dyn Read,) -> Result<Self, io::Error> {
+            fn recv(data: &mut dyn Read,) -> IOResult<Self> {
                 let mut buffer = [0; std::mem::size_of::<$t>()];
                 data.read_exact(&mut buffer)?;
                 Ok(<$t>::from_be_bytes(buffer))
@@ -78,7 +79,7 @@ impl Sendable for bool {
         }
     }
 
-    fn recv(data: &mut dyn Read) -> Result<Self, io::Error> {
+    fn recv(data: &mut dyn Read) -> IOResult<Self> {
         let mut buffer = [0; 1];
         data.read_exact(&mut buffer)?;
         Ok(buffer[0] != 0)
@@ -116,7 +117,7 @@ where
         data
     }
 
-    fn recv(data: &mut dyn Read) -> Result<Self, io::Error> {
+    fn recv(data: &mut dyn Read) -> IOResult<Self> {
         let mut vec = Vec::new();
         let length = u32::recv(data)?;
         for _ in 0..length {
@@ -142,7 +143,7 @@ impl Sendable for String {
         data
     }
 
-    fn recv(data: &mut dyn Read) -> Result<Self, io::Error> {
+    fn recv(data: &mut dyn Read) -> IOResult<Self> {
         let length = u32::recv(data)?;
         let mut buffer = vec![0; length as usize];
         data.read_exact(&mut buffer)?;
@@ -183,7 +184,7 @@ where
         data
     }
 
-    fn recv(data: &mut dyn Read) -> Result<Self, io::Error> {
+    fn recv(data: &mut dyn Read) -> IOResult<Self> {
         let is_present = bool::recv(data).unwrap();
         if !is_present {
             Ok(None)
@@ -210,7 +211,7 @@ where
         T::send(&**self)
     }
 
-    fn recv(data: &mut dyn Read) -> Result<Self, io::Error> {
+    fn recv(data: &mut dyn Read) -> IOResult<Self> {
         Ok(Box::new(T::recv(data)?))
     }
 }
@@ -234,7 +235,7 @@ macro_rules! impl_sendable_tuple {
                 buf
             }
 
-            fn recv(reader: &mut dyn std::io::Read) -> Result<Self , io::Error>{
+            fn recv(reader: &mut dyn std::io::Read) -> IOResult<Self >{
                 Ok(($($name::recv(reader)?,)*))
             }
 
@@ -274,7 +275,7 @@ impl Sendable for () {
         Vec::new()
     }
 
-    fn recv(_reader: &mut dyn std::io::Read) -> Result<Self, io::Error> {
+    fn recv(_reader: &mut dyn std::io::Read) -> IOResult<Self> {
         Ok(())
     }
 }
