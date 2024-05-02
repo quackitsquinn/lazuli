@@ -1,5 +1,6 @@
 use std::{
     collections::HashMap,
+    f32::consts::E,
     io::{self, stdout, Write},
     net::TcpStream,
     sync::{atomic::AtomicBool, Arc},
@@ -8,7 +9,7 @@ use std::{
 
 use crate::{ArcMutex, IOResult, TcpClient};
 
-use super::StreamCollection;
+use super::{input, StreamCollection};
 
 pub struct SocketListener {
     socket: ArcMutex<TcpStream>,
@@ -35,30 +36,63 @@ impl SocketListener {
         // If it is blocking, the thread will never exit, and the program will hang.
         socket.lock().unwrap().set_nonblocking(true)?;
         let streams = self.streams.clone();
-        let thread = std::thread::spawn(move || Self::run_inner(run, socket, streams));
+        let thread = std::thread::spawn(move || Self::run_thread(run, socket, streams));
         self.thread = Some(thread);
         Ok(())
     }
-    fn run_inner(
+    fn run_thread(
         should_close: Arc<AtomicBool>,
         socket: ArcMutex<TcpStream>,
         streams: ArcMutex<StreamCollection>,
     ) -> IOResult<()> {
-        let mut client =
-            TcpClient::from_arcmutex_socket(socket.clone()).with_streams(streams.clone());
         while !should_close.load(std::sync::atomic::Ordering::Acquire) {
-            match client.recv() {
+            match Self::thread_inner(should_close.clone(), socket.clone(), streams.clone()) {
                 Ok(_) => {}
-                Err(err) => {
-                    if err.kind() == std::io::ErrorKind::WouldBlock {
-                        continue;
-                    } else {
-                        return Err(err);
+                Err(e) => {
+                    if e.kind() != io::ErrorKind::WouldBlock {
+                        let mut stdout = stdout();
+                        writeln!(stdout, "Error in listener thread: {}", e).unwrap();
                     }
                 }
             }
         }
 
+        Ok(())
+    }
+
+    fn thread_inner(
+        should_close: Arc<AtomicBool>,
+        socket: ArcMutex<TcpStream>,
+        streams: ArcMutex<StreamCollection>,
+    ) -> IOResult<()> {
+        let mut stream = socket.lock().unwrap();
+        let mut header = input::input_header(&mut *stream)?;
+        let mut would_block = true;
+        while would_block {
+            match input::input_data(&mut *stream, &header) {
+                Err(e) => {
+                    // if the thread is closing, return.
+                    if should_close.load(std::sync::atomic::Ordering::Acquire) {
+                        return Ok(());
+                    }
+                    if e.kind() == io::ErrorKind::WouldBlock {
+                        continue;
+                    }
+                    return Err(e);
+                }
+                Ok(data) => {
+                    input::verify_checksum(&header, data.as_slice())?;
+                    let mut streams = streams.lock().unwrap();
+                    if let Some(info) = streams.get_mut(&header.id()) {
+                        info.push(data, header)?;
+                    } else {
+                        let mut stdout = stdout();
+                        writeln!(stdout, "Stream not found: {}", header.id()).unwrap();
+                    }
+                    would_block = false;
+                }
+            }
+        }
         Ok(())
     }
     pub fn error(&self) -> Option<io::Error> {
@@ -95,21 +129,31 @@ mod tests {
     fn test_listener() {
         let (mut client, mut server) = make_client_server_pair();
         let mut stream: Stream<u32> = client.stream();
+        let mut string_stream: Stream<String> = client.stream();
         client.listen();
         println!("Sending data...");
         server.send(&32u32).unwrap();
+        server.send(&"Hello, world!".to_string()).unwrap();
 
         let mut i = 0;
-        let mut res = None;
-        while res.is_none() {
-            println!("Waiting for data...");
-            thread::sleep(Duration::from_millis(100));
-            if i > 100 {
-                panic!("Stream did not receive data in time.");
+        let mut u32_result = None;
+        let mut string_result = None;
+        while i < 10 {
+            if let Some(data) = stream.get() {
+                u32_result = Some(data);
             }
+            if let Some(data) = string_stream.get() {
+                string_result = Some(data);
+            }
+            if u32_result.is_some() && string_result.is_some() {
+                break;
+            } else {
+                println!("listener err_state: {:?}", client.error());
+            }
+            thread::sleep(Duration::from_millis(10));
             i += 1;
-            res = stream.get();
         }
-        assert_eq!(res.unwrap(), 32);
+        assert_eq!(u32_result.unwrap(), 32);
+        assert_eq!(string_result.unwrap(), "Hello, world!");
     }
 }

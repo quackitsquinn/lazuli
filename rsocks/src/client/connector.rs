@@ -5,7 +5,7 @@ use std::{
     mem::{self, ManuallyDrop},
 };
 
-use crate::{stream::Stream, ArcMutex, Sendable};
+use crate::{stream::Stream, ArcMutex, IOResult, PacketHeader, Sendable, UnknownType};
 
 /// A single byte type that is used to store the raw data.
 #[repr(transparent)]
@@ -19,7 +19,7 @@ pub struct StreamConnector {
     vec_ptr: ArcMutex<*mut Unknown>,
     size: usize,
     grew: ArcMutex<usize>,
-    conversion_fn: fn(&mut dyn Read) -> Vec<u8>,
+    conversion_fn: fn(&mut dyn Read) -> IOResult<Vec<u8>>,
 }
 
 impl StreamConnector {
@@ -37,13 +37,13 @@ impl StreamConnector {
     /// Data is the raw data received from the socket.
     /// # Safety
     /// The caller must ensure that the data is the correct size for the type, and valid.
-    pub unsafe fn push(&mut self, data: Vec<u8>) {
+    pub unsafe fn push_raw(&mut self, data: Vec<u8>) -> IOResult<()> {
         let mut v = self.raw_data.lock().unwrap();
         // We don't need to do any pointer magic if the type is a ZST
         if data.len() == 0 && self.size == 0 {
             let len = v.len();
             unsafe { v.set_len(len + 1) };
-            return;
+            return Ok(());
         }
         // ptr, len in bytes, cap in bytes
         // The len and capacity are converted to bytes because we only know the size of T.
@@ -56,7 +56,7 @@ impl StreamConnector {
         // We don't transmute v because it would have an invalid length and capacity.
         let mut vec = unsafe { Vec::from_raw_parts(ptr, len, cap) };
         // Run the conversion on the input bytes.
-        let mut data = (self.conversion_fn)(&mut data.as_slice());
+        let mut data = (self.conversion_fn)(&mut data.as_slice())?;
         // Check size.
         assert!(
             data.len() % self.size == 0,
@@ -72,6 +72,19 @@ impl StreamConnector {
         let _ = ManuallyDrop::new(vec);
         // Increment how much the vec grew.
         *self.grew.lock().unwrap() += 1;
+        Ok(())
+    }
+
+    pub fn push(&mut self, data: Vec<u8>, header: PacketHeader<UnknownType>) -> IOResult<()> {
+        debug_assert_eq!(header.payload_size as usize, data.len());
+        let mut cursor = std::io::Cursor::new(data);
+        let conv = (self.conversion_fn)(&mut cursor)?;
+        assert!(
+            conv.len() == self.size,
+            "Data is not the correct size for the type."
+        );
+        unsafe { self.push_raw(conv)? };
+        Ok(())
     }
 }
 /// TODO: figure out if this is *actually* safe.
@@ -88,8 +101,17 @@ mod tests {
         let mut stream = Stream::<u32>::new();
         let mut connector = StreamConnector::new(&stream);
         let data = vec![0, 0, 0, 0];
-        unsafe { connector.push(data) };
+        unsafe { connector.push_raw(data).unwrap() };
         assert_eq!(stream.get().unwrap(), 0);
+    }
+
+    #[test]
+    fn test_string() {
+        let mut stream = Stream::<String>::new();
+        let mut connector = StreamConnector::new(&stream);
+        let data = "Hello, world!".to_owned().send();
+        unsafe { connector.push_raw(data).unwrap() };
+        assert_eq!(stream.get().unwrap(), "Hello, world!".to_string());
     }
 
     #[test]
@@ -97,7 +119,7 @@ mod tests {
         let mut stream = Stream::<()>::new();
         let mut connector = StreamConnector::new(&stream);
         let data = vec![];
-        unsafe { connector.push(data) };
+        unsafe { connector.push_raw(data).unwrap() };
         assert_eq!(stream.get().unwrap(), ());
     }
 }

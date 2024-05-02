@@ -26,15 +26,15 @@ pub trait Sendable: Sized {
     /// Converts the type to a function that can be used to convert incoming data to the type.
     /// Returns a Vec<u8> that is the type's representation in memory.
     /// This is used as a hacky way to convert the type if the type cant be known at runtime.
-    fn as_conversion_fn() -> fn(&mut dyn Read) -> Vec<u8> {
+    fn as_conversion_fn() -> fn(&mut dyn Read) -> IOResult<Vec<u8>> {
         |data| {
-            let conversion = Box::new(Self::recv(data).unwrap());
+            let conversion = Box::new(Self::recv(data)?);
             unsafe {
-                Vec::from_raw_parts(
+                Ok(Vec::from_raw_parts(
                     Box::leak(conversion) as *mut Self as *mut u8, // The memory will be managed by the Vec.
                     mem::size_of::<Self>(),
                     mem::size_of::<Self>(),
-                )
+                ))
             }
         }
     }
@@ -46,13 +46,13 @@ macro_rules! impl_sendable_number {
             const SIZE_CONST: bool = true;
             fn send(&self) -> Vec<u8> {
                 // Follow the standard of big-endian
-                <$t>::to_be_bytes(*self).to_vec()
+                <$t>::to_ne_bytes(*self).to_vec()
             }
 
             fn recv(data: &mut dyn Read,) -> IOResult<Self> {
                 let mut buffer = [0; std::mem::size_of::<$t>()];
                 data.read_exact(&mut buffer)?;
-                Ok(<$t>::from_be_bytes(buffer))
+                Ok(<$t>::from_ne_bytes(buffer))
             }
         }
     };
@@ -147,7 +147,11 @@ impl Sendable for String {
         let length = u32::recv(data)?;
         let mut buffer = vec![0; length as usize];
         data.read_exact(&mut buffer)?;
-        Ok(String::from_utf8(buffer).unwrap())
+        let string = String::from_utf8(buffer);
+        match string {
+            Ok(s) => Ok(s),
+            Err(_) => Err(io::Error::new(io::ErrorKind::InvalidData, "Invalid UTF-8").into()),
+        }
     }
 }
 

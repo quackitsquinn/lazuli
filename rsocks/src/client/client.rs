@@ -10,7 +10,7 @@ use crate::{
     hash_type_id, stream::Stream, ArcMutex, IOResult, PacketHeader, Sendable, UnknownType,
 };
 
-use super::{connector::StreamConnector, listener::SocketListener, StreamCollection};
+use super::{connector::StreamConnector, input, listener::SocketListener, StreamCollection};
 
 pub struct TcpClient {
     socket: ArcMutex<TcpStream>,
@@ -73,42 +73,18 @@ impl TcpClient {
     /// Receives data from the socket.
     /// This is blocking, and for now, manual.
     pub fn recv(&mut self) -> IOResult<()> {
-        let mut buf: [u8; 20] = [0; mem::size_of::<PacketHeader<UnknownType>>()];
-        let mut socket = self.socket.lock().unwrap();
-        socket.read_exact(&mut buf)?;
-        //dbg!("wijbnqewpiurnvqewpiovq");
-        let header = unsafe { PacketHeader::from_bytes_unchecked(&buf) };
-        let mut data: Vec<u8> = vec![0; header.payload_size as usize];
-        // yeah ok it's this read_exact call.
-        // ok i think i know whats happening.
-        // this read_exact call is unable to read the data, forcing the fn to return an error.
-        // then the fn is called again, with non header data, and it attempts to parse the payload as a header.
-        // if the type is small, it returns at the first read_exact call. (if the sent data is bigger than mem::size_of::<PacketHeader>())
-        // if the type is big, it will probably panic at PacketHeader::from_bytes_unchecked, because the RSOCK header is almost certainly not there.
-        // I think a maybe solution is to figure out how to loop the read_exact call until it reads all the data.
-        // I don't know how it would handle shutting down the socket though, as it would just hang forever.
-        // i mean ok, my original idea was to abstract this method into a function that you just give some params to.
-        // i didn't do it because i figured the other way would be easier. guess who was wrong.
-        // this would probably explain why the weird debug statement was fixing the issue.
-        // god threading is a mess sometimes.
-        // TODO: fix this awful issue by abstracting this code. Use a modified version of the abstracted code in the listener.
-        // Abstracting is probably a good idea for the long-run as well.
-        // also in the future, this fn will probably intentionally not work if there is an active listener.
-        // The reason this happened was because the listener was in non-blocking mode, and the socket was blocking.
-        // This can have special code to handle it, but that code is for the listener.
-        socket.read_exact(&mut data[0..header.payload_size as usize])?;
-        println!("Received header: {:?}", buf);
-        if !header.verify_checksum(&data) {
+        if self.listener.is_some() {
             return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                "Checksum verification failed",
+                io::ErrorKind::Other,
+                "Cannot receive data while listening. If you want to stop listening, call stop_listening() first.",
             ));
         }
-        if let Some(info) = self.streams.lock().unwrap().get_mut(&header.id()) {
-            println!("Stream found for id: {}", header.id());
-            unsafe { info.push(data) }
-        } else {
-            eprintln!("No stream found for id: {}", header.id());
+        let header = input::input_header(&mut self.socket.lock().unwrap())?;
+        let data = input::input_data(&mut self.socket.lock().unwrap(), &header)?;
+        input::verify_checksum(&header, &data)?;
+        let mut stream = self.streams.lock().unwrap();
+        if let Some(info) = stream.get_mut(&header.id()) {
+            info.push(data, header);
         }
         Ok(())
     }
@@ -138,6 +114,10 @@ impl TcpClient {
             listener.stop().unwrap();
         }
     }
+
+    pub fn error(&self) -> Option<io::Error> {
+        self.listener.as_ref().and_then(|l| l.error())
+    }
 }
 
 #[cfg(test)]
@@ -160,6 +140,22 @@ mod tests {
         server.send(&30u32).unwrap();
         client.recv().unwrap();
         assert_eq!(stream.get().unwrap(), 30);
+    }
+    #[test]
+    fn test_send_recv_string() {
+        let (mut client, mut server) = make_client_server_pair();
+        let mut stream = client.stream::<String>();
+        server.send(&"Hello, world!".to_string()).unwrap();
+        client.recv().unwrap();
+        assert_eq!(stream.get().unwrap(), "Hello, world!".to_string());
+    }
+    #[test]
+    fn test_send_recv_vec() {
+        let (mut client, mut server) = make_client_server_pair();
+        let mut stream = client.stream::<Vec<u8>>();
+        server.send(&vec![0, 1, 2, 3, 4, 5]).unwrap();
+        client.recv().unwrap();
+        assert_eq!(stream.get().unwrap(), vec![0, 1, 2, 3, 4, 5]);
     }
     // Believe it or not, commenting out failing tests is bad practice.
     // It's fine here though, as this is a debug test which requires an already hosted server.
@@ -199,7 +195,7 @@ mod tests {
     fn test_stream_data_struct() {
         let mut stream: Stream<TestStruct> = Stream::new();
         let mut data = StreamConnector::new(&stream);
-        unsafe { data.push(TestStruct { a: 30, b: 40 }.send()) };
+        unsafe { data.push_raw(TestStruct { a: 30, b: 40 }.send()).unwrap() };
         let x = stream.get().unwrap();
         assert_eq!(x.a, 30);
         assert_eq!(x.b, 40);
