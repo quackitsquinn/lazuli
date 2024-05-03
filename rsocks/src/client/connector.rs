@@ -39,7 +39,7 @@ impl StreamConnector {
     /// Data is the raw data received from the socket.
     /// # Safety
     /// The caller must ensure that the data is the correct size for the type, and valid.
-    pub unsafe fn push_raw(&mut self, data: Vec<u8>) -> IOResult<()> {
+    pub unsafe fn push_raw(&mut self, data: Box<[u8]>) -> IOResult<()> {
         let mut v = self.raw_data.lock().unwrap();
         // We don't need to do any pointer magic if the type is a ZST
         if data.len() == 0 && self.size == 0 {
@@ -57,8 +57,6 @@ impl StreamConnector {
         // Create the vec of bytes.
         // We don't transmute v because it would have an invalid length and capacity.
         let mut vec = unsafe { Vec::from_raw_parts(ptr, len, cap) };
-        // Run the conversion on the input bytes.
-        let mut data = (self.conversion_fn)(&mut data.as_slice())?;
         // Check size.
         assert!(
             data.len() % self.size == 0,
@@ -87,7 +85,7 @@ impl StreamConnector {
             conv.len() == self.size,
             "Data is not the correct size for the type."
         );
-        unsafe { self.push_raw(conv.to_vec())? };
+        unsafe { self.push_raw(conv)? };
         Ok(())
     }
 }
@@ -105,7 +103,7 @@ mod tests {
         let mut stream = Stream::<u32>::new();
         let mut connector = StreamConnector::new(&stream);
         let data = vec![0, 0, 0, 0];
-        unsafe { connector.push_raw(data).unwrap() };
+        unsafe { connector.push_raw(data.into()).unwrap() };
         assert_eq!(stream.get().unwrap(), 0);
     }
 
@@ -114,7 +112,7 @@ mod tests {
         let mut stream = Stream::<String>::new();
         let mut connector = StreamConnector::new(&stream);
         let data = "Hello, world!".to_owned().send();
-        unsafe { connector.push_raw(data).unwrap() };
+        unsafe { connector.push_raw(data.into()).unwrap() };
         assert_eq!(stream.get().unwrap(), "Hello, world!".to_string());
     }
 
@@ -123,7 +121,7 @@ mod tests {
         let mut stream = Stream::<()>::new();
         let mut connector = StreamConnector::new(&stream);
         let data = vec![];
-        unsafe { connector.push_raw(data).unwrap() };
+        unsafe { connector.push_raw(data.into()).unwrap() };
         assert_eq!(stream.get().unwrap(), ());
     }
 }

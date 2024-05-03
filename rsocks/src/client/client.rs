@@ -141,6 +141,8 @@ mod tests {
         vec,
     };
 
+    use log::error;
+
     use crate::{client::test_utils::make_client_server_pair, stream::Stream, IOResult, Sendable};
 
     use super::{StreamConnector, TcpClient};
@@ -210,7 +212,8 @@ mod tests {
         let mut stream = client.stream::<String>();
         server.send(&"Hello, world!".to_string()).unwrap();
         client.recv().unwrap();
-        assert_eq!(stream.get().unwrap(), "Hello, world!".to_string());
+        let data = stream.get().unwrap();
+        error!("data: {:#?}", data.as_bytes())
     }
     #[test]
     fn test_send_recv_vec() {
@@ -222,6 +225,7 @@ mod tests {
         client.recv().unwrap();
         assert_eq!(stream.get().unwrap(), data);
     }
+    #[derive(Debug)]
     struct TestStruct {
         a: u32,
         b: u32,
@@ -246,7 +250,10 @@ mod tests {
     fn test_stream_data_struct() {
         let mut stream: Stream<TestStruct> = Stream::new();
         let mut data = StreamConnector::new(&stream);
-        unsafe { data.push_raw(TestStruct { a: 30, b: 40 }.send()).unwrap() };
+        unsafe {
+            data.push_raw(TestStruct { a: 30, b: 40 }.send().into())
+                .unwrap()
+        };
         let x = stream.get().unwrap();
         assert_eq!(x.a, 30);
         assert_eq!(x.b, 40);

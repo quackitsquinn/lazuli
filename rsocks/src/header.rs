@@ -45,7 +45,7 @@ impl<T: Sendable> Debug for PacketHeader<T> {
 }
 /// A ZST that represents an unknown type.
 /// This is used when the type of the payload is unknown.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct UnknownType;
 
 impl Sendable for UnknownType {

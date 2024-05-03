@@ -10,7 +10,7 @@ use crate::header::PacketHeader;
 use crate::IOResult;
 
 /// A trait for types that can be sent over the network.
-pub trait Sendable: Sized {
+pub trait Sendable: Sized + std::fmt::Debug {
     const SIZE_CONST: bool = true;
     /// Returns the header of the packet.
     fn header(&self) -> PacketHeader<Self> {
@@ -32,6 +32,7 @@ pub trait Sendable: Sized {
     fn as_conversion_fn() -> fn(&mut dyn Read) -> IOResult<Box<[u8]>> {
         |data| {
             let conversion = Box::new(Self::recv(data)?);
+            trace!("Converted to bytes: {:?}", conversion);
             let as_slice_bytes = unsafe {
                 slice::from_raw_parts(
                     Box::leak(conversion) as *mut Self as *mut u8,
@@ -152,7 +153,10 @@ impl Sendable for String {
         data.read_exact(&mut buffer)?;
         let string = String::from_utf8(buffer);
         match string {
-            Ok(s) => Ok(s),
+            Ok(s) => {
+                trace!("Received string: {}", s);
+                Ok(s)
+            }
             Err(_) => Err(io::Error::new(io::ErrorKind::InvalidData, "Invalid UTF-8").into()),
         }
     }
@@ -226,7 +230,7 @@ where
 macro_rules! impl_sendable_tuple {
     ($($name:ident)+) => {
         #[allow(non_snake_case)]
-        impl<$($name: Sendable,)*> Sendable for ($($name,)*) {
+        impl<$($name: Sendable + std::fmt::Debug,)*> Sendable for ($($name,)*) {
             const SIZE_CONST: bool = true $( && $name::SIZE_CONST )*;
             fn size(&self) -> u32{
                 let ($(ref $name,)*) = *self;
@@ -262,15 +266,6 @@ impl_sendable_tuple!(A B C D E F G H I);
 impl_sendable_tuple!(A B C D E F G H I J);
 impl_sendable_tuple!(A B C D E F G H I J K);
 impl_sendable_tuple!(A B C D E F G H I J K L);
-impl_sendable_tuple!(A B C D E F G H I J K L M);
-impl_sendable_tuple!(A B C D E F G H I J K L M N);
-impl_sendable_tuple!(A B C D E F G H I J K L M N O);
-impl_sendable_tuple!(A B C D E F G H I J K L M N O P);
-impl_sendable_tuple!(A B C D E F G H I J K L M N O P Q);
-impl_sendable_tuple!(A B C D E F G H I J K L M N O P Q R);
-impl_sendable_tuple!(A B C D E F G H I J K L M N O P Q R S);
-impl_sendable_tuple!(A B C D E F G H I J K L M N O P Q R S T);
-impl_sendable_tuple!(A B C D E F G H I J K L M N O P Q R S T U);
 
 impl Sendable for () {
     const SIZE_CONST: bool = true;
