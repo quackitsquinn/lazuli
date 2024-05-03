@@ -15,11 +15,20 @@ mod test_utils {
     };
 
     use super::*;
-    static PORTS: [u16; 3] = [13131, 13132, 13133];
-    static ADDRESSES: [SocketAddr; 3] = [
+    static PORTS: [u16; 10] = [
+        13131, 13132, 13133, 13134, 13135, 13136, 13137, 13138, 13139, 13140,
+    ];
+    static ADDRESSES: [SocketAddr; 10] = [
         SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), PORTS[0]),
         SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), PORTS[1]),
         SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), PORTS[2]),
+        SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), PORTS[3]),
+        SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), PORTS[4]),
+        SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), PORTS[5]),
+        SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), PORTS[6]),
+        SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), PORTS[7]),
+        SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), PORTS[8]),
+        SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), PORTS[9]),
     ];
 
     /// Creates a client and server pair.
