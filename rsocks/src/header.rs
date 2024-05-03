@@ -1,4 +1,5 @@
 use std::{
+    fmt::Debug,
     hash::{DefaultHasher, Hash, Hasher},
     io, mem,
 };
@@ -7,7 +8,7 @@ use crate::{hash_type_id, IOResult, Sendable};
 
 const HEADER: [u8; 5] = *b"RSOCK";
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(C)] // This is important for the safety of the from_bytes_unchecked function.
 /// The header of a packet. When a packet is sent over a socket, it is prepended with this header.
 /// # Why the type parameter?
@@ -29,6 +30,18 @@ where
     type_id: u32,
     // allow for some sort of type safety
     _phantom: std::marker::PhantomData<T>,
+}
+
+impl<T: Sendable> Debug for PacketHeader<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PacketHeader")
+            .field("header", &self.header)
+            .field("has_checksum", &self.has_checksum)
+            .field("checksum", &self.checksum)
+            .field("payload_size", &self.payload_size)
+            .field("type_id", &self.type_id)
+            .finish_non_exhaustive()
+    }
 }
 /// A ZST that represents an unknown type.
 /// This is used when the type of the payload is unknown.

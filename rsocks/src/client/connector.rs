@@ -5,6 +5,8 @@ use std::{
     mem::{self, ManuallyDrop},
 };
 
+use log::trace;
+
 use crate::{stream::Stream, ArcMutex, IOResult, PacketHeader, Sendable, UnknownType};
 
 /// A single byte type that is used to store the raw data.
@@ -19,7 +21,7 @@ pub struct StreamConnector {
     vec_ptr: ArcMutex<*mut Unknown>,
     size: usize,
     grew: ArcMutex<usize>,
-    conversion_fn: fn(&mut dyn Read) -> IOResult<Vec<u8>>,
+    conversion_fn: fn(&mut dyn Read) -> IOResult<Box<[u8]>>,
 }
 
 impl StreamConnector {
@@ -65,7 +67,7 @@ impl StreamConnector {
             data.len()
         );
         // Add the bytes to the array
-        vec.append(&mut data);
+        vec.append(data.to_vec().as_mut());
         // Update the vector pointer in case it gets changed.
         *self.vec_ptr.lock().unwrap() = vec.as_mut_ptr() as *mut Unknown;
         // Forget the array we created to prevent any double-frees.
@@ -77,13 +79,15 @@ impl StreamConnector {
 
     pub fn push(&mut self, data: Vec<u8>, header: PacketHeader<UnknownType>) -> IOResult<()> {
         debug_assert_eq!(header.payload_size as usize, data.len());
+        // Create a cursor from the data.
         let mut cursor = std::io::Cursor::new(data);
         let conv = (self.conversion_fn)(&mut cursor)?;
+        trace!("Converted data: {:?}", conv);
         assert!(
             conv.len() == self.size,
             "Data is not the correct size for the type."
         );
-        unsafe { self.push_raw(conv)? };
+        unsafe { self.push_raw(conv.to_vec())? };
         Ok(())
     }
 }

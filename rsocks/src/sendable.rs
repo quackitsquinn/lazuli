@@ -1,7 +1,10 @@
+use core::slice;
 use std::{
     io::{self, Read},
     mem,
 };
+
+use log::trace;
 
 use crate::header::PacketHeader;
 use crate::IOResult;
@@ -26,16 +29,16 @@ pub trait Sendable: Sized {
     /// Converts the type to a function that can be used to convert incoming data to the type.
     /// Returns a Vec<u8> that is the type's representation in memory.
     /// This is used as a hacky way to convert the type if the type cant be known at runtime.
-    fn as_conversion_fn() -> fn(&mut dyn Read) -> IOResult<Vec<u8>> {
+    fn as_conversion_fn() -> fn(&mut dyn Read) -> IOResult<Box<[u8]>> {
         |data| {
             let conversion = Box::new(Self::recv(data)?);
-            unsafe {
-                Ok(Vec::from_raw_parts(
-                    Box::leak(conversion) as *mut Self as *mut u8, // The memory will be managed by the Vec.
+            let as_slice_bytes = unsafe {
+                slice::from_raw_parts(
+                    Box::leak(conversion) as *mut Self as *mut u8,
                     mem::size_of::<Self>(),
-                    mem::size_of::<Self>(),
-                ))
-            }
+                )
+            };
+            Ok(as_slice_bytes.into()) // well its good to know that impl Into<Box<[u8]>> for &[u8] is implemented.
         }
     }
 }

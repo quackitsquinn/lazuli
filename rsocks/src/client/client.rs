@@ -6,6 +6,8 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+use log::trace;
+
 use crate::{
     hash_type_id, stream::Stream, ArcMutex, IOResult, PacketHeader, Sendable, UnknownType,
 };
@@ -63,6 +65,7 @@ impl TcpClient {
         T: Sendable + 'static + Debug,
     {
         let bytes = data.send();
+        trace!("Sending data: {:?}", bytes);
         let mut p_header = data.header();
         p_header.calculate_checksum(&bytes);
         let mut socket = self.socket.lock().unwrap();
@@ -80,11 +83,19 @@ impl TcpClient {
             ));
         }
         let header = input::input_header(&mut self.socket.lock().unwrap())?;
+        trace!("Received header: {:?}", header);
         let data = input::input_data(&mut self.socket.lock().unwrap(), &header)?;
+        trace!("Received data: {:?}", data);
         input::verify_checksum(&header, &data)?;
+        trace!("Checksum verified");
         let mut stream = self.streams.lock().unwrap();
         if let Some(info) = stream.get_mut(&header.id()) {
-            info.push(data, header);
+            info.push(data, header)?;
+        } else {
+            return Err(io::Error::new(
+                io::ErrorKind::NotFound,
+                "Stream not found for data",
+            ));
         }
         Ok(())
     }
@@ -127,22 +138,74 @@ mod tests {
         net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener},
         thread,
         time::Duration,
+        vec,
     };
 
     use crate::{client::test_utils::make_client_server_pair, stream::Stream, IOResult, Sendable};
 
     use super::{StreamConnector, TcpClient};
 
-    #[test]
-    fn test_send_recv() {
-        let (mut client, mut server) = make_client_server_pair();
-        let mut stream = client.stream::<u32>();
-        server.send(&30u32).unwrap();
-        client.recv().unwrap();
-        assert_eq!(stream.get().unwrap(), 30);
+    macro_rules! test_send_recv_num {
+        ($name: ident, $type: ty, $val: expr) => {
+            #[test]
+            fn $name() {
+                let (mut client, mut server) = make_client_server_pair();
+                let mut stream = client.stream::<$type>();
+                server.send(&($val as $type)).unwrap();
+                client.recv().unwrap();
+                assert_eq!(stream.get().unwrap(), $val);
+            }
+        };
+        // handle multiple sets
+        ($($name: ident, $type: ty, $val: expr), *) => {
+            $(test_send_recv_num!($name, $type, $val);)*
+        };
     }
+    mod send_recv_num_tests {
+        use super::*;
+        test_send_recv_num!(
+            test_send_u8,
+            u8,
+            1,
+            test_send_u16,
+            u16,
+            2,
+            test_send_u32,
+            u32,
+            3,
+            test_send_u64,
+            u64,
+            4,
+            test_send_u128,
+            u128,
+            5,
+            test_send_i8,
+            i8,
+            -1,
+            test_send_i16,
+            i16,
+            -2,
+            test_send_i32,
+            i32,
+            -3,
+            test_send_i64,
+            i64,
+            -4,
+            test_send_i128,
+            i128,
+            -5,
+            test_send_f32,
+            f32,
+            1.0,
+            test_send_f64,
+            f64,
+            2.0
+        );
+    }
+
     #[test]
     fn test_send_recv_string() {
+        crate::init_logging();
         let (mut client, mut server) = make_client_server_pair();
         let mut stream = client.stream::<String>();
         server.send(&"Hello, world!".to_string()).unwrap();
@@ -151,26 +214,14 @@ mod tests {
     }
     #[test]
     fn test_send_recv_vec() {
+        crate::init_logging();
+        let data: Vec<u8> = vec![0, 1, 2, 3, 4, 5];
         let (mut client, mut server) = make_client_server_pair();
         let mut stream = client.stream::<Vec<u8>>();
-        server.send(&vec![0, 1, 2, 3, 4, 5]).unwrap();
+        server.send(&data).unwrap();
         client.recv().unwrap();
-        assert_eq!(stream.get().unwrap(), vec![0, 1, 2, 3, 4, 5]);
+        assert_eq!(stream.get().unwrap(), data);
     }
-    // Believe it or not, commenting out failing tests is bad practice.
-    // It's fine here though, as this is a debug test which requires an already hosted server.
-
-    // #[test]
-    // fn test_send() {
-    //     let mut client =
-    //         TcpClient::new((Ipv4Addr::LOCALHOST, 13131)).expect("Unable to make socket");
-    //     client.send(&"sent data".to_owned()).unwrap();
-    //     client.send(&0xFFFFu16).unwrap();
-    //     thread::sleep(Duration::from_secs(1));
-    //     client.send(&0xFFFFu16).unwrap();
-    //     client.send(&"sending u32".to_owned()).unwrap();
-    //     client.send(&0xFFFFFFFFu32).unwrap();
-    // }
     struct TestStruct {
         a: u32,
         b: u32,
