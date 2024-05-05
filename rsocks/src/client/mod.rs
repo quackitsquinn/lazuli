@@ -9,10 +9,7 @@ pub use client::TcpClient;
 
 #[cfg(test)]
 mod test_utils {
-    use std::{
-        io::{Read, Write},
-        net::{IpAddr, Ipv4Addr, SocketAddr, TcpStream},
-    };
+    use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
     use super::*;
     static PORTS: [u16; 10] = [

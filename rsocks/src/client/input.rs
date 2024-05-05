@@ -5,7 +5,7 @@ use std::{io::Read, mem, net::TcpStream};
 
 use log::trace;
 
-use crate::{header, IOResult, PacketHeader, UnknownType};
+use crate::{IOResult, PacketHeader, UnknownType};
 
 /// Reads the header of a packet from a TcpStream.
 #[inline]

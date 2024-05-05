@@ -1,7 +1,7 @@
 use std::{
     fmt::Debug,
     hash::{DefaultHasher, Hash, Hasher},
-    io, mem,
+    mem,
 };
 
 use crate::{hash_type_id, IOResult, Sendable};

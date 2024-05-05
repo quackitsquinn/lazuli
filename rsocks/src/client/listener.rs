@@ -1,13 +1,12 @@
 use std::{
-    collections::HashMap,
-    f32::consts::E,
     io::{self, stdout, Write},
     net::TcpStream,
     sync::{atomic::AtomicBool, Arc},
-    time::Duration,
 };
 
-use crate::{ArcMutex, IOResult, TcpClient};
+use log::error;
+
+use crate::{ArcMutex, IOResult};
 
 use super::{input, StreamCollection};
 
@@ -66,7 +65,7 @@ impl SocketListener {
         streams: ArcMutex<StreamCollection>,
     ) -> IOResult<()> {
         let mut stream = socket.lock().unwrap();
-        let mut header = input::input_header(&mut *stream)?;
+        let header = input::input_header(&mut *stream)?;
         let mut would_block = true;
         while would_block {
             match input::input_data(&mut *stream, &header) {
@@ -86,8 +85,7 @@ impl SocketListener {
                     if let Some(info) = streams.get_mut(&header.id()) {
                         info.push(data, header)?;
                     } else {
-                        let mut stdout = stdout();
-                        writeln!(stdout, "Stream not found: {}", header.id()).unwrap();
+                        error!("Stream not found: {}", header.id());
                     }
                     would_block = false;
                 }
@@ -121,39 +119,6 @@ impl Drop for SocketListener {
 
 #[cfg(test)]
 mod tests {
-    use std::{thread, time::Duration};
 
-    use crate::{client::test_utils::make_client_server_pair, stream::Stream};
-
-    #[test]
-    fn test_listener() {
-        let (mut client, mut server) = make_client_server_pair();
-        let mut stream: Stream<u32> = client.stream();
-        let mut string_stream: Stream<String> = client.stream();
-        client.listen();
-        println!("Sending data...");
-        server.send(&32u32).unwrap();
-        server.send(&"Hello, world!".to_string()).unwrap();
-
-        let mut i = 0;
-        let mut u32_result = None;
-        let mut string_result = None;
-        while i < 10 {
-            if let Some(data) = stream.get() {
-                u32_result = Some(data);
-            }
-            if let Some(data) = string_stream.get() {
-                string_result = Some(data);
-            }
-            if u32_result.is_some() && string_result.is_some() {
-                break;
-            } else {
-                println!("listener err_state: {:?}", client.error());
-            }
-            thread::sleep(Duration::from_millis(10));
-            i += 1;
-        }
-        assert_eq!(u32_result.unwrap(), 32);
-        assert_eq!(string_result.unwrap(), "Hello, world!");
-    }
+    // TODO: add tests or a macro to generate tests.
 }

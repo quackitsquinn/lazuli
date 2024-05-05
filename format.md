@@ -19,7 +19,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>>{
         player_rot: 0.0,
         player_name: "Player".to_string(),
     };
-    data_stream.send(data.clone());
+    data_stream.send(&data);
     let received_data = data_stream2.receive();
     assert_eq!(received_data, data);
 }
@@ -64,3 +64,4 @@ struct RawPacket {
 - [x] Pointer based data structures (vec, str, etc) (This is planned to be supported in the future)
   - This would be done by having custom serialization and deserialization functions for each data structure
 - [ ] Cross language support (not planned)
+- [ ] 

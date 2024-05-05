@@ -1,16 +1,13 @@
 use std::{
     fmt::Debug,
-    io::{self, Read, Write},
-    mem,
+    io::{self, Write},
     net::{TcpStream, ToSocketAddrs},
     sync::{Arc, Mutex},
 };
 
 use log::trace;
 
-use crate::{
-    hash_type_id, stream::Stream, ArcMutex, IOResult, PacketHeader, Sendable, UnknownType,
-};
+use crate::{hash_type_id, stream::Stream, ArcMutex, IOResult, Sendable};
 
 use super::{connector::StreamConnector, input, listener::SocketListener, StreamCollection};
 
@@ -113,10 +110,11 @@ impl TcpClient {
         stream
     }
 
-    pub fn listen(&mut self) {
-        let mut listener = SocketListener::new(self.socket.clone(), self.streams.clone());
+    pub fn listen(&mut self) -> IOResult<()> {
+        let listener = SocketListener::new(self.socket.clone(), self.streams.clone());
         self.listener = Some(listener);
-        self.listener.as_mut().unwrap().run();
+        self.listener.as_mut().unwrap().run()?;
+        Ok(())
     }
 
     pub fn stop_listening(&mut self) {
@@ -133,19 +131,11 @@ impl TcpClient {
 
 #[cfg(test)]
 mod tests {
-    use std::{
-        io,
-        net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener},
-        thread,
-        time::Duration,
-        vec,
-    };
-
-    use log::error;
+    use std::vec;
 
     use crate::{client::test_utils::make_client_server_pair, stream::Stream, IOResult, Sendable};
 
-    use super::{StreamConnector, TcpClient};
+    use super::StreamConnector;
 
     macro_rules! test_send_recv_num {
         ($name: ident, $type: ty, $val: expr) => {
@@ -213,7 +203,7 @@ mod tests {
         server.send(&"Hello, world!".to_string()).unwrap();
         client.recv().unwrap();
         let data = stream.get().unwrap();
-        error!("data: {:#?}", data.as_bytes())
+        assert_eq!(data, "Hello, world!".to_string());
     }
     #[test]
     fn test_send_recv_vec() {

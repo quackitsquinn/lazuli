@@ -79,13 +79,13 @@ impl StreamConnector {
         debug_assert_eq!(header.payload_size as usize, data.len());
         // Create a cursor from the data.
         let mut cursor = std::io::Cursor::new(data);
-        let conv = (self.conversion_fn)(&mut cursor)?;
-        trace!("Converted data: {:?}", conv);
+        let converted = (self.conversion_fn)(&mut cursor)?;
+        trace!("Converted data: {:?}", converted);
         assert!(
-            conv.len() == self.size,
+            converted.len() == self.size,
             "Data is not the correct size for the type."
         );
-        unsafe { self.push_raw(conv)? };
+        unsafe { self.push_raw(converted)? };
         Ok(())
     }
 }
@@ -96,6 +96,8 @@ unsafe impl Sync for StreamConnector {}
 
 #[cfg(test)]
 mod tests {
+    use core::slice;
+
     use super::*;
 
     #[test]
@@ -111,8 +113,19 @@ mod tests {
     fn test_string() {
         let mut stream = Stream::<String>::new();
         let mut connector = StreamConnector::new(&stream);
-        let data = "Hello, world!".to_owned().send();
-        unsafe { connector.push_raw(data.into()).unwrap() };
+        let data = "Hello, world!".to_owned();
+        unsafe {
+            connector
+                .push_raw(
+                    slice::from_raw_parts(
+                        &data as *const String as *const u8,
+                        mem::size_of::<String>(),
+                    )
+                    .into(),
+                )
+                .unwrap();
+            mem::forget(data);
+        };
         assert_eq!(stream.get().unwrap(), "Hello, world!".to_string());
     }
 
