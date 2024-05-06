@@ -19,7 +19,7 @@ pub type IOResult<T> = std::result::Result<T, std::io::Error>;
 #[cfg(test)]
 pub(crate) fn init_logging() {
     simplelog::TermLogger::init(
-        simplelog::LevelFilter::Trace,
+        simplelog::LevelFilter::Debug,
         simplelog::Config::default(),
         simplelog::TerminalMode::Mixed,
         simplelog::ColorChoice::Auto,
