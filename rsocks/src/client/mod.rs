@@ -9,6 +9,7 @@ pub(self) type StreamCollection = std::collections::HashMap<u32, connector::Stre
 pub use client::TcpClient;
 
 #[cfg(test)]
+/// Test utilities for the client module.
 mod test_utils {
     use std::{
         net::{IpAddr, Ipv4Addr, SocketAddr},
@@ -16,6 +17,8 @@ mod test_utils {
     };
 
     use log::info;
+
+    use crate::Sendable;
 
     use self::server::Server;
 
@@ -63,5 +66,16 @@ mod test_utils {
         *PORT_ACTIVE_BASE.lock().unwrap() += 1;
 
         server.unwrap()
+    }
+
+    /// Tests sending and receiving data. Convenience function for testing.
+    pub(super) fn test_send_recv<T>(client: &mut TcpClient, server: &mut TcpClient, data: T)
+    where
+        T: Sendable + 'static + PartialEq,
+    {
+        let mut stream = client.stream::<T>();
+        server.send(&data).unwrap();
+        client.recv().unwrap();
+        assert_eq!(stream.get().unwrap(), data);
     }
 }

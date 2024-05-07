@@ -54,7 +54,7 @@ impl Server {
 
 #[cfg(test)]
 mod test {
-    use crate::client::test_utils::make_server;
+    use crate::client::test_utils::{make_server, test_send_recv};
 
     use super::*;
 
@@ -63,11 +63,12 @@ mod test {
         let mut server = make_server();
         let addr = server.local_addr()?;
         let mut client = TcpClient::new(addr)?;
-        let mut u32_stream = client.stream::<u32>();
-        let stream = server.accept()?;
-        stream.lock().unwrap().send(&1234u32)?;
-        client.recv()?;
-        assert_eq!(u32_stream.get(), Some(1234));
+        let server_client = server.accept()?;
+        test_send_recv(
+            &mut client,
+            &mut *server_client.lock().unwrap(),
+            "Hello, world!".to_owned(),
+        );
         Ok(())
     }
 }
