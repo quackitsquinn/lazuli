@@ -89,8 +89,8 @@ impl StreamConnector {
         Ok(())
     }
 }
-/// TODO: figure out if this is *actually* safe.
-/// Im fairly certain mostly everything in StreamConnector is locked behind an ArcMutex, so it should be safe.
+
+/// Everything in StreamConnector is behind a mutex, besides the size. The size should never change.
 unsafe impl Send for StreamConnector {}
 unsafe impl Sync for StreamConnector {}
 

@@ -14,6 +14,8 @@ mod test_utils {
         sync::{Mutex, OnceLock},
     };
 
+    use log::info;
+
     use super::*;
     static PORTS_BASE: u16 = 5000;
     static PORT_ACTIVE_BASE: Mutex<u16> = Mutex::new(PORTS_BASE);
@@ -23,6 +25,7 @@ mod test_utils {
     pub(super) fn make_client_server_pair() -> (TcpClient, TcpClient) {
         use std::net::TcpListener;
         let server = TcpListener::bind((Ipv4Addr::LOCALHOST, *PORT_ACTIVE_BASE.lock().unwrap()));
+
         *PORT_ACTIVE_BASE.lock().unwrap() += 1;
 
         if let Err(e) = server {

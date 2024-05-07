@@ -49,8 +49,7 @@ impl SocketListener {
                 Ok(_) => {}
                 Err(e) => {
                     if e.kind() != io::ErrorKind::WouldBlock {
-                        let mut stdout = stdout();
-                        writeln!(stdout, "Error in listener thread: {}", e).unwrap();
+                        error!("Error in listener thread: {}", e);
                     }
                 }
             }
