@@ -2,6 +2,7 @@ mod client;
 mod connector;
 mod input;
 mod listener;
+mod server;
 
 pub(self) type StreamCollection = std::collections::HashMap<u32, connector::StreamConnector>;
 
@@ -15,6 +16,8 @@ mod test_utils {
     };
 
     use log::info;
+
+    use self::server::Server;
 
     use super::*;
     static PORTS_BASE: u16 = 5000;
@@ -43,5 +46,22 @@ mod test_utils {
         let server = server.accept().unwrap().0;
 
         (client, TcpClient::from_stream(server))
+    }
+
+    pub(super) fn make_server() -> Server {
+        let server = Server::new((Ipv4Addr::LOCALHOST, *PORT_ACTIVE_BASE.lock().unwrap()));
+
+        if let Err(e) = server {
+            // If the port is in use, try again.
+            if e.kind() == std::io::ErrorKind::AddrInUse {
+                return make_server();
+            } else {
+                panic!("Failed to bind server: {}", e);
+            }
+        }
+
+        *PORT_ACTIVE_BASE.lock().unwrap() += 1;
+
+        server.unwrap()
     }
 }
