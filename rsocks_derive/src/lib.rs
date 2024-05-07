@@ -4,7 +4,7 @@ use proc_macro2::TokenStream as TokenStream2;
 use quote::{quote, ToTokens};
 use syn::{Data, Field, Ident, Index, Type};
 
-#[proc_macro_derive(Sendable, attributes(error_type))]
+#[proc_macro_derive(Sendable)]
 pub fn derive_sendable(input: TokenStream) -> TokenStream {
     // Parse the input tokens into a syntax tree
     let input = syn::parse(input);
