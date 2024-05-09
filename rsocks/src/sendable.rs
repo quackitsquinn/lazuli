@@ -11,7 +11,6 @@ use crate::IOResult;
 
 /// A trait for types that can be sent over the network.
 pub trait Sendable: Sized + std::fmt::Debug {
-    const SIZE_CONST: bool = true;
     /// Returns the header of the packet.
     fn header(&self) -> PacketHeader<Self> {
         unsafe { PacketHeader::new(self.size()) }
@@ -47,7 +46,6 @@ pub trait Sendable: Sized + std::fmt::Debug {
 macro_rules! impl_sendable_number {
     ($t:ty) => {
         impl Sendable for $t {
-            const SIZE_CONST: bool = true;
             fn send(&self) -> Vec<u8> {
                 // Follow the standard of big-endian
                 <$t>::to_ne_bytes(*self).to_vec()
@@ -73,8 +71,6 @@ impl_sendable_number!(i8, i16, i32, i64, i128);
 impl_sendable_number!(f32, f64);
 
 impl Sendable for bool {
-    const SIZE_CONST: bool = true;
-
     fn send(&self) -> Vec<u8> {
         if *self {
             vec![1]
@@ -93,23 +89,17 @@ impl<T> Sendable for Vec<T>
 where
     T: Sendable,
 {
-    const SIZE_CONST: bool = false;
     fn header(&self) -> PacketHeader<Self> {
         unsafe { PacketHeader::new(self.size()) }
     }
 
     fn size(&self) -> u32 {
-        if T::SIZE_CONST {
-            // Safety: We know that the size of the payload is constant, so we can calculate the size of the payload.
-            (std::mem::size_of::<T>() * self.len() + 4) as u32 // Add 4 bytes for the length of the vector.
-        } else {
-            let mut size = 0;
-            for item in self {
-                size += item.size();
-            }
-            // Safety: We have just calculated the size of the payload.
-            size + 4 // Add 4 bytes for the length of the vector.
+        let mut size = 0;
+        for item in self {
+            size += item.size();
         }
+        // Safety: We have just calculated the size of the payload.
+        size + 4 // Add 4 bytes for the length of the vector.
     }
 
     fn send(&self) -> Vec<u8> {
@@ -132,7 +122,6 @@ where
 }
 
 impl Sendable for String {
-    const SIZE_CONST: bool = false;
     fn header(&self) -> PacketHeader<Self> {
         unsafe { PacketHeader::new(self.size()) }
     }
@@ -166,7 +155,6 @@ impl<T> Sendable for Option<T>
 where
     T: Sendable,
 {
-    const SIZE_CONST: bool = T::SIZE_CONST;
     fn header(&self) -> PacketHeader<Self> {
         match self {
             Some(value) => unsafe { PacketHeader::new(value.size() + 1) },
@@ -209,7 +197,6 @@ impl<T> Sendable for Box<T>
 where
     T: Sendable + Copy,
 {
-    const SIZE_CONST: bool = T::SIZE_CONST;
     fn header(&self) -> PacketHeader<Self> {
         unsafe { PacketHeader::new(self.size()) }
     }
@@ -231,7 +218,6 @@ macro_rules! impl_sendable_tuple {
     ($($name:ident)+) => {
         #[allow(non_snake_case)]
         impl<$($name: Sendable + std::fmt::Debug,)*> Sendable for ($($name,)*) {
-            const SIZE_CONST: bool = true $( && $name::SIZE_CONST )*;
             fn size(&self) -> u32{
                 let ($(ref $name,)*) = *self;
                 let mut total = 0;
@@ -268,7 +254,6 @@ impl_sendable_tuple!(A B C D E F G H I J K);
 impl_sendable_tuple!(A B C D E F G H I J K L);
 
 impl Sendable for () {
-    const SIZE_CONST: bool = true;
     fn size(&self) -> u32 {
         0
     }

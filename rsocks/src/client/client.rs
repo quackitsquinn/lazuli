@@ -222,7 +222,6 @@ mod tests {
     }
 
     impl Sendable for TestStruct {
-        const SIZE_CONST: bool = true;
         fn send(&self) -> Vec<u8> {
             let mut buf = Vec::new();
             buf.extend(self.a.send());

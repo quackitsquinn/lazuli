@@ -69,13 +69,6 @@ fn impl_sendable(ast: &syn::DeriveInput) -> proc_macro::TokenStream {
 
     // Generate the send fn. (Serialize each field and append them to a Vec<u8>)
     let send_gen: TokenStream2 = generate_send(&data);
-    // Generate the size_const fn. (Check if all fields have a const size)
-    let dyn_size = type_count.iter().map(|field| {
-        let ty = &field.0;
-        quote! {
-            <#ty as rsocks::Sendable>::SIZE_CONST
-        }
-    });
     // Generate the recv fn. (Deserialize each field from a dyn Read)
     let recv_gen: TokenStream2 = generate_recv(&data, &name);
     quote! {
@@ -83,7 +76,6 @@ fn impl_sendable(ast: &syn::DeriveInput) -> proc_macro::TokenStream {
         #field_impl_check // Check that all fields implement Sendable
 
         impl rsocks::Sendable for #name {
-            const SIZE_CONST: bool = true #( && #dyn_size )*;
 
             fn size(&self) -> u32 {
                 let mut size = 0;
