@@ -9,7 +9,8 @@ use log::error;
 use crate::{ArcMutex, IOResult};
 
 use super::{input, StreamCollection};
-
+/// A listener for a TcpClient. This listener listens for incoming data on the socket and pushes it to the appropriate stream.
+/// This listener is intended to be used in tandem with a TcpClient, and is not intended to be used on its own.
 pub struct SocketListener {
     socket: ArcMutex<TcpStream>,
     streams: ArcMutex<StreamCollection>,
@@ -19,6 +20,7 @@ pub struct SocketListener {
 }
 
 impl SocketListener {
+    /// Creates a new SocketListener.
     pub fn new(socket: ArcMutex<TcpStream>, streams: ArcMutex<StreamCollection>) -> Self {
         Self {
             socket,
@@ -28,6 +30,7 @@ impl SocketListener {
             error: None,
         }
     }
+    /// Runs the listener. This starts a new thread that listens for incoming data on the socket.
     pub fn run(&mut self) -> IOResult<()> {
         let run = self.should_close.clone();
         let socket = self.socket.clone();
@@ -35,7 +38,9 @@ impl SocketListener {
         // If it is blocking, the thread will never exit, and the program will hang.
         socket.lock().unwrap().set_nonblocking(true)?;
         let streams = self.streams.clone();
-        let thread = std::thread::spawn(move || Self::run_thread(run, socket, streams));
+        let thread = std::thread::Builder::new()
+            .name("RSOCK listener".to_string())
+            .spawn(move || Self::run_thread(run, socket, streams))?;
         self.thread = Some(thread);
         Ok(())
     }
@@ -92,6 +97,7 @@ impl SocketListener {
         }
         Ok(())
     }
+    /// Gets the error, if there is one. This will return None if there is no error.
     pub fn error(&self) -> Option<io::Error> {
         if let Some(err) = &self.error {
             // Make a clone of the error. (I don't know why io::Error doesn't implement Clone, but it's probably for a good reason.)
@@ -100,7 +106,7 @@ impl SocketListener {
             None
         }
     }
-
+    /// Stops the listener. This will stop the listener thread.
     pub fn stop(&mut self) -> IOResult<()> {
         self.should_close
             .store(true, std::sync::atomic::Ordering::Release);

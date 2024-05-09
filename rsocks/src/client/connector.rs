@@ -14,8 +14,8 @@ use crate::{stream::Stream, ArcMutex, IOResult, PacketHeader, Sendable, UnknownT
 struct Unknown(u8);
 
 /// The various data required to store a stream.
-/// More specifically, this un-types streams, while keeping some type information.
-/// This is used to store streams in a hashmap without knowing the type.
+/// More specifically, this un-types streams, while keeping needed data.
+// HACK: like this *whole* setup is a hack. I don't know if there is a better way to do this, but there probably is.
 pub struct StreamConnector {
     raw_data: ArcMutex<Vec<Unknown>>,
     vec_ptr: ArcMutex<*mut Unknown>,
