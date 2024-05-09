@@ -16,7 +16,7 @@ mod test_utils {
         sync::{Mutex, OnceLock},
     };
 
-    use log::info;
+    use log::{debug, info};
 
     use crate::Sendable;
 
@@ -25,6 +25,22 @@ mod test_utils {
     use super::*;
     static PORTS_BASE: u16 = 5000;
     static PORT_ACTIVE_BASE: Mutex<u16> = Mutex::new(PORTS_BASE);
+
+    fn addr_in_use(addr: SocketAddr) -> bool {
+        use std::net::TcpListener;
+        TcpListener::bind(addr).is_err()
+    }
+
+    pub(super) fn get_socket_addr() -> SocketAddr {
+        let mut port = *PORT_ACTIVE_BASE.lock().unwrap();
+        let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), port);
+        while addr_in_use(addr) {
+            debug!("Port {} is in use, trying next port.", port);
+            port += 1;
+        }
+        *PORT_ACTIVE_BASE.lock().unwrap() = port + 1;
+        addr
+    }
 
     /// Creates a client and server pair.
     /// (client, server)
