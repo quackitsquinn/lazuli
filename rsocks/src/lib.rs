@@ -10,8 +10,10 @@ pub mod header;
 mod sendable;
 mod stream;
 
-/// An Arc of a Mutex.
+/// An Atomic Reference Counted Mutex. This is used to share data between threads.
+// exists because ArcMutex<T> is easier to type than Arc<Mutex<T>>.
 pub(crate) type ArcMutex<T> = std::sync::Arc<std::sync::Mutex<T>>;
+
 /// A Result type that returns an io::Error. We use io::Error throughout the library because it is the most fitting error type for this library.
 pub type IOResult<T> = std::result::Result<T, std::io::Error>;
 
