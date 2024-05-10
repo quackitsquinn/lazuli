@@ -6,7 +6,7 @@ use std::{
 
 use log::error;
 
-use crate::{ArcMutex, IOResult};
+use crate::{ArcMutex, Result};
 
 use super::{input, StreamCollection};
 /// A listener for a TcpClient. This listener listens for incoming data on the socket and pushes it to the appropriate stream.
@@ -14,7 +14,7 @@ use super::{input, StreamCollection};
 pub struct SocketListener {
     socket: ArcMutex<TcpStream>,
     streams: ArcMutex<StreamCollection>,
-    thread: Option<std::thread::JoinHandle<IOResult<()>>>,
+    thread: Option<std::thread::JoinHandle<Result<()>>>,
     should_close: Arc<AtomicBool>,
     error: Option<io::Error>,
 }
@@ -31,7 +31,7 @@ impl SocketListener {
         }
     }
     /// Runs the listener. This starts a new thread that listens for incoming data on the socket.
-    pub fn run(&mut self) -> IOResult<()> {
+    pub fn run(&mut self) -> Result<()> {
         let run = self.should_close.clone();
         let socket = self.socket.clone();
         // Set the socket to non-blocking mode. This is EXTREMELY important for the listener to work.
@@ -48,7 +48,7 @@ impl SocketListener {
         should_close: Arc<AtomicBool>,
         socket: ArcMutex<TcpStream>,
         streams: ArcMutex<StreamCollection>,
-    ) -> IOResult<()> {
+    ) -> Result<()> {
         while !should_close.load(std::sync::atomic::Ordering::Acquire) {
             match Self::thread_inner(should_close.clone(), socket.clone(), streams.clone()) {
                 Ok(_) => {}
@@ -67,7 +67,7 @@ impl SocketListener {
         should_close: Arc<AtomicBool>,
         socket: ArcMutex<TcpStream>,
         streams: ArcMutex<StreamCollection>,
-    ) -> IOResult<()> {
+    ) -> Result<()> {
         let mut stream = socket.lock().unwrap();
         let header = input::input_header(&mut *stream)?;
         let mut would_block = true;
@@ -107,7 +107,7 @@ impl SocketListener {
         }
     }
     /// Stops the listener. This will stop the listener thread.
-    pub fn stop(&mut self) -> IOResult<()> {
+    pub fn stop(&mut self) -> Result<()> {
         self.should_close
             .store(true, std::sync::atomic::Ordering::Release);
         self.thread.take().unwrap().join().unwrap()

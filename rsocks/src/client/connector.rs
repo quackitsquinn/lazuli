@@ -7,7 +7,7 @@ use std::{
 
 use log::trace;
 
-use crate::{stream::Stream, ArcMutex, IOResult, PacketHeader, Sendable, UnknownType};
+use crate::{stream::Stream, ArcMutex, Result, PacketHeader, Sendable, UnknownType};
 
 /// A single byte type that is used to store the raw data.
 #[repr(transparent)]
@@ -21,7 +21,7 @@ pub struct StreamConnector {
     vec_ptr: ArcMutex<*mut Unknown>,
     size: usize,
     grew: ArcMutex<usize>,
-    conversion_fn: fn(&mut dyn Read) -> IOResult<Box<[u8]>>,
+    conversion_fn: fn(&mut dyn Read) -> Result<Box<[u8]>>,
 }
 
 impl StreamConnector {
@@ -39,7 +39,7 @@ impl StreamConnector {
     /// Data is the raw data received from the socket.
     /// # Safety
     /// The caller must ensure that the data is the correct size for the type, and valid.
-    pub unsafe fn push_raw(&mut self, data: Box<[u8]>) -> IOResult<()> {
+    pub unsafe fn push_raw(&mut self, data: Box<[u8]>) -> Result<()> {
         let mut v = self.raw_data.lock().unwrap();
         // We don't need to do any pointer magic if the type is a ZST
         if data.len() == 0 && self.size == 0 {
@@ -75,7 +75,7 @@ impl StreamConnector {
         Ok(())
     }
 
-    pub fn push(&mut self, data: Vec<u8>, header: PacketHeader<UnknownType>) -> IOResult<()> {
+    pub fn push(&mut self, data: Vec<u8>, header: PacketHeader<UnknownType>) -> Result<()> {
         debug_assert_eq!(header.payload_size as usize, data.len());
         // Create a cursor from the data.
         let mut cursor = std::io::Cursor::new(data);

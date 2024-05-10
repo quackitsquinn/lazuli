@@ -14,8 +14,10 @@ mod stream;
 // exists because ArcMutex<T> is easier to type than Arc<Mutex<T>>.
 pub(crate) type ArcMutex<T> = std::sync::Arc<std::sync::Mutex<T>>;
 
-/// A Result type that returns an io::Error. We use io::Error throughout the library because it is the most fitting error type for this library.
-pub type IOResult<T> = std::result::Result<T, std::io::Error>;
+/// The result type for rsocks.
+///
+///`std::io::Error` is used as the error type because it fits almost all use cases, and iis already widely used in the standard library.
+pub type Result<T> = std::result::Result<T, std::io::Error>;
 
 /// Configures the logging for testing.
 #[cfg(test)]

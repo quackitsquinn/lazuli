@@ -7,7 +7,7 @@ use std::{
 
 use log::trace;
 
-use crate::{hash_type_id, stream::Stream, ArcMutex, IOResult, Sendable};
+use crate::{hash_type_id, stream::Stream, ArcMutex, Result, Sendable};
 
 use super::{connector::StreamConnector, input, listener::SocketListener, StreamCollection};
 
@@ -39,7 +39,7 @@ impl TcpClient {
         self
     }
 
-    pub fn new<T: ToSocketAddrs>(addr: T) -> IOResult<TcpClient> {
+    pub fn new<T: ToSocketAddrs>(addr: T) -> Result<TcpClient> {
         let stream = addr.to_socket_addrs()?;
         for addr in stream {
             match TcpStream::connect(addr) {
@@ -57,7 +57,7 @@ impl TcpClient {
 
     /// Sends data to the socket.
     #[inline]
-    pub fn send<T>(&mut self, data: &T) -> IOResult<()>
+    pub fn send<T>(&mut self, data: &T) -> Result<()>
     where
         T: Sendable + 'static + Debug,
     {
@@ -72,7 +72,7 @@ impl TcpClient {
     }
     /// Receives data from the socket.
     /// This is blocking, and for now, manual.
-    pub fn recv(&mut self) -> IOResult<()> {
+    pub fn recv(&mut self) -> Result<()> {
         if self.listener.is_some() {
             return Err(io::Error::new(
                 io::ErrorKind::Other,
@@ -110,7 +110,7 @@ impl TcpClient {
         stream
     }
 
-    pub fn listen(&mut self) -> IOResult<()> {
+    pub fn listen(&mut self) -> Result<()> {
         let listener = SocketListener::new(self.socket.clone(), self.streams.clone());
         self.listener = Some(listener);
         self.listener.as_mut().unwrap().run()?;
@@ -133,7 +133,7 @@ impl TcpClient {
 mod tests {
     use std::vec;
 
-    use crate::{client::test_utils::make_client_server_pair, stream::Stream, IOResult, Sendable};
+    use crate::{client::test_utils::make_client_server_pair, stream::Stream, Result, Sendable};
 
     use super::StreamConnector;
 
@@ -228,7 +228,7 @@ mod tests {
             buf.extend(self.b.send());
             buf
         }
-        fn recv(data: &mut dyn std::io::prelude::Read) -> IOResult<Self> {
+        fn recv(data: &mut dyn std::io::prelude::Read) -> Result<Self> {
             let a = u32::recv(data)?;
             let b = u32::recv(data)?;
             Ok(TestStruct { a, b })

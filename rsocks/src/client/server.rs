@@ -3,7 +3,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use crate::{ArcMutex, IOResult, Sendable, TcpClient};
+use crate::{ArcMutex, Result, Sendable, TcpClient};
 
 pub struct Server {
     listener: TcpListener,
@@ -12,7 +12,7 @@ pub struct Server {
 /// TODO: down the road, add a tokio feature flag and use tokio for various async operations.
 impl Server {
     /// Creates a new server.
-    pub fn new<T: ToSocketAddrs>(addrs: T) -> IOResult<Self> {
+    pub fn new<T: ToSocketAddrs>(addrs: T) -> Result<Self> {
         let listener = TcpListener::bind(addrs)?;
         Ok(Server {
             listener,
@@ -20,7 +20,7 @@ impl Server {
         })
     }
     /// Creates a new non-blocking server.
-    pub fn new_nonblocking<T: ToSocketAddrs>(addrs: T) -> IOResult<Self> {
+    pub fn new_nonblocking<T: ToSocketAddrs>(addrs: T) -> Result<Self> {
         let listener = TcpListener::bind(addrs)?;
         listener.set_nonblocking(true)?;
         Ok(Server {
@@ -29,7 +29,7 @@ impl Server {
         })
     }
     /// Accepts a connection.
-    pub fn accept(&mut self) -> IOResult<ArcMutex<TcpClient>> {
+    pub fn accept(&mut self) -> Result<ArcMutex<TcpClient>> {
         let stream = self.listener.accept()?.0;
         let stream = TcpClient::from_stream(stream);
         let stream = Arc::new(Mutex::new(stream));
@@ -38,7 +38,7 @@ impl Server {
     }
 
     /// Accepts n connections.
-    pub fn accept_n(&mut self, n: usize) -> IOResult<Vec<ArcMutex<TcpClient>>> {
+    pub fn accept_n(&mut self, n: usize) -> Result<Vec<ArcMutex<TcpClient>>> {
         let mut streams = vec![];
         for _ in 0..n {
             streams.push(self.accept()?);
@@ -49,7 +49,7 @@ impl Server {
 
 impl Server {
     /// Sends a message to all clients.
-    pub fn broadcast<T: Sendable + 'static>(&self, data: &T) -> IOResult<()> {
+    pub fn broadcast<T: Sendable + 'static>(&self, data: &T) -> Result<()> {
         for stream in &self.streams {
             let mut stream = stream.lock().unwrap();
             stream.send(data)?;
@@ -57,7 +57,7 @@ impl Server {
         Ok(())
     }
     /// Gets the local address of the server.
-    pub fn local_addr(&self) -> IOResult<std::net::SocketAddr> {
+    pub fn local_addr(&self) -> Result<std::net::SocketAddr> {
         self.listener.local_addr()
     }
 }
@@ -76,7 +76,7 @@ mod test {
     }
 
     #[test]
-    fn test_server() -> IOResult<()> {
+    fn test_server() -> Result<()> {
         let mut server = make_server();
         let addr = server.local_addr()?;
         let (mut client, server_client) = make_server_client_pair(&mut server);
@@ -89,7 +89,7 @@ mod test {
     }
 
     #[test]
-    fn test_brodcast() -> IOResult<()> {
+    fn test_brodcast() -> Result<()> {
         let mut server = make_server();
         let mut client1 = make_server_client_pair(&mut server);
         let mut client2 = make_server_client_pair(&mut server);
@@ -103,7 +103,7 @@ mod test {
         Ok(())
     }
     #[test]
-    fn test_nonblocking_server() -> IOResult<()> {
+    fn test_nonblocking_server() -> Result<()> {
         let mut server = Server::new_nonblocking(get_socket_addr())?;
         assert!(server.accept().is_err());
         if let Err(e) = server.accept() {

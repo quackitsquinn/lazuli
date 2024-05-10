@@ -5,11 +5,11 @@ use std::{io::Read, mem, net::TcpStream};
 
 use log::trace;
 
-use crate::{IOResult, PacketHeader, UnknownType};
+use crate::{PacketHeader, Result, UnknownType};
 
 /// Reads the header of a packet from a TcpStream.
 #[inline]
-pub fn input_header(stream: &mut TcpStream) -> IOResult<PacketHeader<UnknownType>> {
+pub fn input_header(stream: &mut TcpStream) -> Result<PacketHeader<UnknownType>> {
     let mut header = [0; mem::size_of::<PacketHeader<UnknownType>>()];
 
     stream.read_exact(&mut header)?;
@@ -25,7 +25,7 @@ pub fn input_header(stream: &mut TcpStream) -> IOResult<PacketHeader<UnknownType
 /// The header type is UnknownType because this method is intended to be used in tandem with input_header,
 /// or any other method that reads from a socket, where the type will be unknown.
 #[inline]
-pub fn input_data(stream: &mut TcpStream, header: &PacketHeader<UnknownType>) -> IOResult<Vec<u8>> {
+pub fn input_data(stream: &mut TcpStream, header: &PacketHeader<UnknownType>) -> Result<Vec<u8>> {
     let mut data = vec![0; header.payload_size as usize];
 
     trace!("Reading {} bytes of data", header.payload_size);
@@ -44,7 +44,7 @@ pub fn input_data(stream: &mut TcpStream, header: &PacketHeader<UnknownType>) ->
 /// This function is mainly a convenience function for verifying the checksum of a packet.
 /// It runs PacketHeader::verify_checksum, but converts a bool to an IOResult.
 #[inline]
-pub fn verify_checksum(header: &PacketHeader<UnknownType>, data: &[u8]) -> IOResult<()> {
+pub fn verify_checksum(header: &PacketHeader<UnknownType>, data: &[u8]) -> Result<()> {
     if header.verify_checksum(data) {
         Ok(())
     } else {
