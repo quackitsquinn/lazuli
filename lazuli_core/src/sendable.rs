@@ -68,13 +68,13 @@ macro_rules! impl_sendable_number {
         impl Sendable for $t {
             fn send(&self) -> Vec<u8> {
                 // Follow the standard of big-endian
-                <$t>::to_be_bytes(*self).to_vec()
+                <$t>::to_ne_bytes(*self).to_vec()
             }
 
             fn recv(data: &mut dyn Read,) -> Result<Self> {
                 let mut buffer = [0; std::mem::size_of::<$t>()];
                 data.read_exact(&mut buffer)?;
-                Ok(<$t>::from_be_bytes(buffer))
+                Ok(<$t>::from_ne_bytes(buffer))
             }
         }
     };
