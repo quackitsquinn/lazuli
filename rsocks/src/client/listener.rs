@@ -126,12 +126,4 @@ impl Drop for SocketListener {
 mod tests {
 
     // TODO: add tests or a macro to generate tests.
-
-    use core::slice;
-    use std::{
-        mem::ManuallyDrop,
-        ptr::{self, null_mut},
-    };
-
-    use crate::{client, Client};
 }
