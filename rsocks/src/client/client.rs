@@ -127,6 +127,14 @@ impl TcpClient {
     pub fn error(&self) -> Option<io::Error> {
         self.listener.as_ref().and_then(|l| l.error())
     }
+
+    pub fn is_connected(&self) -> bool {
+        self.socket.lock().unwrap().peer_addr().is_ok()
+    }
+
+    pub fn peer_addr(&self) -> io::Result<std::net::SocketAddr> {
+        self.socket.lock().unwrap().peer_addr()
+    }
 }
 
 #[cfg(test)]

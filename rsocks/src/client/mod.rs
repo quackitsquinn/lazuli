@@ -7,16 +7,17 @@ mod server;
 pub(self) type StreamCollection = std::collections::HashMap<u32, connector::StreamConnector>;
 
 pub use client::TcpClient;
+pub use server::Server;
 
 #[cfg(test)]
 /// Test utilities for the client module.
 mod test_utils {
     use std::{
         net::{IpAddr, Ipv4Addr, SocketAddr},
-        sync::{Mutex, OnceLock},
+        sync::Mutex,
     };
 
-    use log::{debug, info};
+    use log::debug;
 
     use crate::Sendable;
 

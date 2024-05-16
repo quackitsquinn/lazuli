@@ -1,5 +1,5 @@
 use std::{
-    net::{TcpListener, TcpStream, ToSocketAddrs},
+    net::{TcpListener, ToSocketAddrs},
     sync::{Arc, Mutex},
 };
 
@@ -45,6 +45,16 @@ impl Server {
         }
         Ok(streams)
     }
+
+    pub fn incoming(&mut self) -> impl Iterator<Item = Result<ArcMutex<TcpClient>>> + '_ {
+        self.listener.incoming().map(|stream| {
+            let stream = stream?;
+            let stream = TcpClient::from_stream(stream);
+            let stream = Arc::new(Mutex::new(stream));
+            self.streams.push(stream.clone());
+            Ok(stream)
+        })
+    }
 }
 
 impl Server {
@@ -70,7 +80,7 @@ mod test {
 
     fn make_server_client_pair(server: &mut Server) -> (TcpClient, ArcMutex<TcpClient>) {
         let addr = server.local_addr().unwrap();
-        let mut client = TcpClient::new(addr).unwrap();
+        let client = TcpClient::new(addr).unwrap();
         let server_client = server.accept().unwrap();
         (client, server_client)
     }
@@ -78,7 +88,6 @@ mod test {
     #[test]
     fn test_server() -> Result<()> {
         let mut server = make_server();
-        let addr = server.local_addr()?;
         let (mut client, server_client) = make_server_client_pair(&mut server);
         test_send_recv(
             &mut client,
@@ -89,7 +98,7 @@ mod test {
     }
 
     #[test]
-    fn test_brodcast() -> Result<()> {
+    fn test_broadcast() -> Result<()> {
         let mut server = make_server();
         let mut client1 = make_server_client_pair(&mut server);
         let mut client2 = make_server_client_pair(&mut server);

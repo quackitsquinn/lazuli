@@ -1,8 +1,8 @@
 //! # rsocks: A TCP socket library oriented for game design
 //!
 
-pub use rsocks;
-pub use rsocks_derive;
+pub use rsocks::*;
+pub use rsocks_derive::Sendable;
 
 #[cfg(test)]
 mod tests {
