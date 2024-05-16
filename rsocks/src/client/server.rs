@@ -3,11 +3,11 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use crate::{ArcMutex, Result, Sendable, TcpClient};
+use crate::{ArcMutex, Result, Sendable, Client};
 
 pub struct Server {
     listener: TcpListener,
-    streams: Vec<ArcMutex<TcpClient>>,
+    streams: Vec<ArcMutex<Client>>,
 }
 /// TODO: down the road, add a tokio feature flag and use tokio for various async operations.
 impl Server {
@@ -29,16 +29,16 @@ impl Server {
         })
     }
     /// Accepts a connection.
-    pub fn accept(&mut self) -> Result<ArcMutex<TcpClient>> {
+    pub fn accept(&mut self) -> Result<ArcMutex<Client>> {
         let stream = self.listener.accept()?.0;
-        let stream = TcpClient::from_stream(stream);
+        let stream = Client::from_stream(stream);
         let stream = Arc::new(Mutex::new(stream));
         self.streams.push(stream.clone());
         Ok(stream)
     }
 
     /// Accepts n connections.
-    pub fn accept_n(&mut self, n: usize) -> Result<Vec<ArcMutex<TcpClient>>> {
+    pub fn accept_n(&mut self, n: usize) -> Result<Vec<ArcMutex<Client>>> {
         let mut streams = vec![];
         for _ in 0..n {
             streams.push(self.accept()?);
@@ -46,10 +46,10 @@ impl Server {
         Ok(streams)
     }
 
-    pub fn incoming(&mut self) -> impl Iterator<Item = Result<ArcMutex<TcpClient>>> + '_ {
+    pub fn incoming(&mut self) -> impl Iterator<Item = Result<ArcMutex<Client>>> + '_ {
         self.listener.incoming().map(|stream| {
             let stream = stream?;
-            let stream = TcpClient::from_stream(stream);
+            let stream = Client::from_stream(stream);
             let stream = Arc::new(Mutex::new(stream));
             self.streams.push(stream.clone());
             Ok(stream)
@@ -78,9 +78,9 @@ mod test {
 
     use super::*;
 
-    fn make_server_client_pair(server: &mut Server) -> (TcpClient, ArcMutex<TcpClient>) {
+    fn make_server_client_pair(server: &mut Server) -> (Client, ArcMutex<Client>) {
         let addr = server.local_addr().unwrap();
-        let client = TcpClient::new(addr).unwrap();
+        let client = Client::new(addr).unwrap();
         let server_client = server.accept().unwrap();
         (client, server_client)
     }

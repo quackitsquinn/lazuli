@@ -6,7 +6,7 @@ mod server;
 
 pub(self) type StreamCollection = std::collections::HashMap<u32, connector::StreamConnector>;
 
-pub use client::TcpClient;
+pub use client::Client;
 pub use server::Server;
 
 #[cfg(test)]
@@ -45,7 +45,7 @@ mod test_utils {
 
     /// Creates a client and server pair.
     /// (client, server)
-    pub(super) fn make_client_server_pair() -> (TcpClient, TcpClient) {
+    pub(super) fn make_client_server_pair() -> (Client, Client) {
         use std::net::TcpListener;
         let server = TcpListener::bind((Ipv4Addr::LOCALHOST, *PORT_ACTIVE_BASE.lock().unwrap()));
 
@@ -62,10 +62,10 @@ mod test_utils {
 
         let server = server.unwrap();
 
-        let client = TcpClient::new(server.local_addr().unwrap()).unwrap();
+        let client = Client::new(server.local_addr().unwrap()).unwrap();
         let server = server.accept().unwrap().0;
 
-        (client, TcpClient::from_stream(server))
+        (client, Client::from_stream(server))
     }
 
     pub(super) fn make_server() -> Server {
@@ -86,7 +86,7 @@ mod test_utils {
     }
 
     /// Tests sending and receiving data. Convenience function for testing.
-    pub(super) fn test_send_recv<T>(client: &mut TcpClient, server: &mut TcpClient, data: T)
+    pub(super) fn test_send_recv<T>(client: &mut Client, server: &mut Client, data: T)
     where
         T: Sendable + 'static + PartialEq,
     {

@@ -11,15 +11,15 @@ use crate::{hash_type_id, stream::Stream, ArcMutex, Result, Sendable};
 
 use super::{connector::StreamConnector, input, listener::SocketListener, StreamCollection};
 
-pub struct TcpClient {
+pub struct Client {
     socket: ArcMutex<TcpStream>,
     streams: ArcMutex<StreamCollection>,
     listener: Option<SocketListener>,
 }
 
-impl TcpClient {
+impl Client {
     pub fn from_stream(stream: TcpStream) -> Self {
-        TcpClient {
+        Client {
             socket: Arc::new(Mutex::new(stream)),
             streams: Default::default(),
             listener: None,
@@ -27,7 +27,7 @@ impl TcpClient {
     }
 
     pub fn from_arcmutex_socket(stream: ArcMutex<TcpStream>) -> Self {
-        TcpClient {
+        Client {
             socket: stream,
             streams: Default::default(),
             listener: None,
@@ -39,7 +39,7 @@ impl TcpClient {
         self
     }
 
-    pub fn new<T: ToSocketAddrs>(addr: T) -> Result<TcpClient> {
+    pub fn new<T: ToSocketAddrs>(addr: T) -> Result<Client> {
         let stream = addr.to_socket_addrs()?;
         for addr in stream {
             match TcpStream::connect(addr) {
@@ -134,6 +134,9 @@ impl TcpClient {
 
     pub fn peer_addr(&self) -> io::Result<std::net::SocketAddr> {
         self.socket.lock().unwrap().peer_addr()
+    }
+    pub fn set_nonblocking(&self, nonblocking: bool) -> io::Result<()> {
+        self.socket.lock().unwrap().set_nonblocking(nonblocking)
     }
 }
 

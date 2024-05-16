@@ -133,5 +133,5 @@ mod tests {
         ptr::{self, null_mut},
     };
 
-    use crate::{client, TcpClient};
+    use crate::{client, Client};
 }

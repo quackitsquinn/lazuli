@@ -42,7 +42,7 @@ fn hash_type_id<T: 'static>() -> u32 {
     hasher.finish() as u32
 }
 
+pub use client::Client;
 pub use client::Server;
-pub use client::TcpClient;
 pub(crate) use header::*;
 pub use sendable::Sendable;
