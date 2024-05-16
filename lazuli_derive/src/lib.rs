@@ -58,7 +58,7 @@ fn impl_sendable(ast: &syn::DeriveInput) -> proc_macro::TokenStream {
         .map(|(ty, _)| {
             quote! {
                 const _: fn() = || {
-                    fn _assert_sendable<T: rsocks::Sendable>() {}
+                    fn _assert_sendable<T: lazuli_core::Sendable>() {}
                     _assert_sendable::<#ty>();
                 };
             }
@@ -75,7 +75,7 @@ fn impl_sendable(ast: &syn::DeriveInput) -> proc_macro::TokenStream {
 
         #field_impl_check // Check that all fields implement Sendable
 
-        impl rsocks::Sendable for #name {
+        impl lazuli_core::Sendable for #name {
 
             fn size(&self) -> u32 {
                 let mut size = 0;
@@ -132,7 +132,7 @@ fn generate_size(input: &syn::DataStruct) -> TokenStream2 {
         |ident, field| {
             let ty = &field.ty;
             quote! {
-                size += <#ty as rsocks::Sendable>::size(&self.#ident);
+                size += <#ty as lazuli_core::Sendable>::size(&self.#ident);
             }
         },
         input,
@@ -161,7 +161,7 @@ fn generate_recv(input: &syn::DataStruct, name: &Ident) -> TokenStream2 {
                     let ty = &field.ty;
                     let ident = field.ident.as_ref().unwrap();
                     quote! {
-                        #ident: <#ty as rsocks::Sendable>::recv(data)?,
+                        #ident: <#ty as lazuli_core::Sendable>::recv(data)?,
                     }
                 })
                 .collect();
@@ -179,7 +179,7 @@ fn generate_recv(input: &syn::DataStruct, name: &Ident) -> TokenStream2 {
                 .map(|(_, field)| {
                     let ty = &field.ty;
                     quote! {
-                        <#ty as rsocks::Sendable>::recv(data)?,
+                        <#ty as lazuli_core::Sendable>::recv(data)?,
                     }
                 })
                 .collect();

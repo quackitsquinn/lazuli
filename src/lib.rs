@@ -1,16 +1,13 @@
-//! # rsocks: A TCP socket library oriented for game design
-//!
-
-pub use rsocks::*;
-pub use rsocks_derive::Sendable;
+pub use lazuli_core::*;
+pub use lazuli_derive::Sendable;
 
 #[cfg(test)]
 mod tests {
     use std::io::Cursor;
 
-    use rsocks::Sendable;
+    use lazuli_core::Sendable;
 
-    #[derive(rsocks_derive::Sendable, PartialEq, Debug)]
+    #[derive(lazuli_derive::Sendable, PartialEq, Debug)]
     struct TestSendable {
         uint32_1: u32,
         uint32_2: u32,
@@ -31,7 +28,7 @@ mod tests {
         assert_eq!(test, test2);
     }
 
-    #[derive(rsocks_derive::Sendable, PartialEq, Debug)]
+    #[derive(lazuli_derive::Sendable, PartialEq, Debug)]
     struct TestSendable2 {
         sendable: TestSendable,
         vec_u32: Vec<u32>,
@@ -75,7 +72,7 @@ mod tests {
         assert_eq!(test, received);
     }
 
-    #[derive(rsocks_derive::Sendable, Debug, PartialEq)]
+    #[derive(lazuli_derive::Sendable, Debug, PartialEq)]
     struct TestSendable3 {
         a: TestSendable2,
         b: Vec<u32>,
@@ -98,7 +95,7 @@ mod tests {
         assert_eq!(constructed, received);
     }
 
-    #[derive(rsocks_derive::Sendable, Debug, PartialEq)]
+    #[derive(lazuli_derive::Sendable, Debug, PartialEq)]
     struct TupleTest(u32, u32);
 
     #[test]
