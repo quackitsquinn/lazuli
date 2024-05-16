@@ -1,3 +1,7 @@
+//! Contains the PacketHeader struct. This struct is used to prepend a header to a packet.
+//!
+//! The header is used to ensure that the data is sent and received correctly.
+
 use std::{
     fmt::Debug,
     hash::{DefaultHasher, Hash, Hasher},
@@ -6,18 +10,18 @@ use std::{
 
 use crate::{hash_type_id, Result, Sendable};
 
+// RSOCK was the development name for this project.
+// TODO: Maybe change this to lazi or something similar.
 const HEADER: [u8; 5] = *b"RSOCK";
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(C)] // This is important for the safety of the from_bytes_unchecked function.
 /// The header of a packet. When a packet is sent over a socket, it is prepended with this header.
-/// # Why the type parameter?
-/// The type parameter is used to have some sort of type safety.
-/// Without the type parameter, it would be possible to create a PacketHeader with a `type_id` that does not match the actual type of the payload.
-/// This would lead to undefined behavior.
-///
-/// The type parameter is used to ensure that the `type_id` matches the actual type of the payload.
-/// You can make an untyped PacketHeader by using `PacketHeader<UnknownType>`, but this is only intended for receiving packets.
+/// This contains the type_id of the payload, the size of the payload, and a checksum of the payload.
+/// The checksum is used to verify that the payload was received correctly.
+/// The type_id is used to determine the type of the payload.
+/// The payload_size is used to determine the size of the payload.
+// TODO: Remove the type parameter. It was never used, and ended up causing some issues.
 pub struct PacketHeader<T>
 where
     T: 'static + Sendable,
@@ -43,6 +47,7 @@ impl<T: Sendable> Debug for PacketHeader<T> {
             .finish_non_exhaustive()
     }
 }
+
 /// A ZST that represents an unknown type.
 /// This is used when the type of the payload is unknown.
 #[derive(Clone, Copy, Debug)]
@@ -91,7 +96,7 @@ where
         }
     }
     /// Calculates the checksum of the payload. Sets the checksum field to the calculated checksum.
-    pub fn calculate_checksum(&mut self, payload: &[u8]) {
+    pub(crate) fn calculate_checksum(&mut self, payload: &[u8]) {
         let mut hasher = DefaultHasher::new();
         hasher.write(payload);
         self.checksum = hasher.finish() as u32;
@@ -119,7 +124,8 @@ where
         }
     }
 
-    pub fn id(&self) -> u32 {
+    /// Gets the type_id of the payload.
+    pub(crate) fn id(&self) -> u32 {
         self.type_id
     }
 }
