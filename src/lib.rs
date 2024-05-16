@@ -106,4 +106,15 @@ mod tests {
         let test2 = TupleTest::recv(&mut p).unwrap();
         assert_eq!(test, test2);
     }
+    #[derive(lazuli_derive::Sendable, Debug, PartialEq)]
+    struct TestZST();
+
+    #[test]
+    fn test_zst() {
+        let test = TestZST();
+        let data = test.send();
+        let mut p = Cursor::new(data);
+        let test2 = TestZST::recv(&mut p).unwrap();
+        assert_eq!(test, test2);
+    }
 }
