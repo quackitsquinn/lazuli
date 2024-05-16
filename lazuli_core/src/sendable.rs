@@ -1,3 +1,16 @@
+//! A module for types that can be sent over the network.
+//!
+//! This module contains the Sendable trait, which is used to convert types to bytes that can be sent over the network.
+//! The Sendable trait is implemented for all primitive types, and can be derived for custom types.
+//!
+//! Why use a Trait?
+//! - The Sendable trait allows for any type that has stuff such as heap allocations to be sent over the network.
+//! - The Sendable trait allows for optimization of the size of the type when sent over the network.
+//!     - This in particularly useful for Option<T> because it can be sent as a single byte.
+//! - The Sendable trait allows for the type to be converted to bytes in a way that is easy to implement.
+//!
+//!
+
 use core::slice;
 use std::{
     io::{self, Read},
@@ -10,21 +23,27 @@ use crate::header::PacketHeader;
 use crate::Result;
 
 /// A trait for types that can be sent over the network.
+///
+/// Sendable has the Debug bound because it is internally useful, and can be helpful for debugging.
 pub trait Sendable: Sized + std::fmt::Debug {
     /// Returns the header of the packet.
     fn header(&self) -> PacketHeader<Self> {
         unsafe { PacketHeader::new(self.size()) }
     }
+
     /// Returns the size of the type.
     ///
     /// **This does not return the size of the type in memory, but the size of the type when sent over the network.**
     fn size(&self) -> u32 {
         std::mem::size_of::<Self>() as u32
     }
+
     /// Converts the type to a Vec<u8> that can be sent over the network.
     fn send(&self) -> Vec<u8>;
+
     /// Converts an incoming stream of bytes to the type.
     fn recv(data: &mut dyn Read) -> Result<Self>;
+
     /// Converts the type to a function that can be used to convert incoming data to the type.
     /// Returns a Vec<u8> that is the type's representation in memory.
     /// This is used as a hacky way to convert the type if the type cant be known at runtime.
@@ -33,12 +52,13 @@ pub trait Sendable: Sized + std::fmt::Debug {
             let conversion = Box::new(Self::recv(data)?);
             trace!("Converted to bytes: {:?}", conversion);
             let as_slice_bytes = unsafe {
+                // We use a slice to get the bytes of the type. This is safe because we are using the size of the type to get the slice.
                 slice::from_raw_parts(
                     Box::leak(conversion) as *mut Self as *mut u8,
                     mem::size_of::<Self>(),
                 )
             };
-            Ok(as_slice_bytes.into()) // well its good to know that impl Into<Box<[u8]>> for &[u8] is implemented.
+            Ok(as_slice_bytes.into())
         }
     }
 }
@@ -48,13 +68,13 @@ macro_rules! impl_sendable_number {
         impl Sendable for $t {
             fn send(&self) -> Vec<u8> {
                 // Follow the standard of big-endian
-                <$t>::to_ne_bytes(*self).to_vec()
+                <$t>::to_be_bytes(*self).to_vec()
             }
 
             fn recv(data: &mut dyn Read,) -> Result<Self> {
                 let mut buffer = [0; std::mem::size_of::<$t>()];
                 data.read_exact(&mut buffer)?;
-                Ok(<$t>::from_ne_bytes(buffer))
+                Ok(<$t>::from_be_bytes(buffer))
             }
         }
     };
@@ -85,6 +105,7 @@ impl Sendable for bool {
         Ok(buffer[0] != 0)
     }
 }
+
 impl<T> Sendable for Vec<T>
 where
     T: Sendable,
@@ -98,8 +119,7 @@ where
         for item in self {
             size += item.size();
         }
-        // Safety: We have just calculated the size of the payload.
-        size + 4 // Add 4 bytes for the length of the vector.
+        size + 4
     }
 
     fn send(&self) -> Vec<u8> {
@@ -239,7 +259,8 @@ macro_rules! impl_sendable_tuple {
         }
     };
 }
-// gross
+// Implement the Sendable trait for tuples of size 0 to 12.
+// We don't go above 12 because A. A tuple of size 12 is already pretty big, and B. Debug implements up to 12.
 impl_sendable_tuple!(A);
 impl_sendable_tuple!(A B);
 impl_sendable_tuple!(A B C);

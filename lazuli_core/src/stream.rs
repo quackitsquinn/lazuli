@@ -1,9 +1,14 @@
+//! This module contains the Stream struct, which is used to receive data from a socket.
+//!
+//! Streams are how data is received. You create a stream for the type you want to receive, and then call recv() on the client or server to get the data.
+//! Streams are used to receive data from a socket because they allow for type safety and easy access to the data.
+
 use std::{
     mem::{self, ManuallyDrop},
     sync::{Arc, Mutex},
 };
 
-/// A stream of data received from a socket.
+/// A stream of data received from a socket. This is used to receive data from a socket.
 #[derive(Debug)]
 pub struct Stream<T> {
     data: Arc<Mutex<Vec<T>>>,
@@ -15,6 +20,7 @@ impl<T> Stream<T>
 where
     T: 'static,
 {
+    /// Creates a new stream.
     pub(crate) fn new() -> Self {
         Stream {
             data: Arc::new(Mutex::new(vec![])),
@@ -22,7 +28,7 @@ where
             ptr: Arc::new(Mutex::new(std::ptr::null_mut())),
         }
     }
-
+    /// Checks if the stream has grown and replaces the vec with the new vec.
     fn check_vec(&mut self) {
         let mut grew_by = self.grew.lock().unwrap();
         // Check if the stream was given any data.
@@ -46,13 +52,15 @@ where
     /// Gets one item from the stream.
     pub fn get(&mut self) -> Option<T> {
         self.check_vec();
+        // We will *always* pop the data. If we retain ownership, things can go very wrong because of the way the stream is designed.
         self.data.lock().unwrap().pop()
     }
+
     /// Gets the count of items in the stream.
     pub fn len(&self) -> usize {
         self.data.lock().unwrap().len() + *self.grew.lock().unwrap()
     }
-    /// Gets a pointer to the underlying buffer.
+    /// Gets the underlying vec.
     pub fn get_vec(&self) -> Arc<Mutex<Vec<T>>> {
         self.data.clone()
     }
