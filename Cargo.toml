@@ -1,9 +1,14 @@
 
 [package]
 name = "lazuli"
-version = "0.1.0"
 edition = "2021"
 publish = true
+version.workspace = true
+authors.workspace = true
+description.workspace = true
+readme.workspace = true
+license.workspace = true
+repository.workspace = true
 
 
 [workspace]
@@ -17,6 +22,7 @@ readme = "README.md"
 repository = "https://github.com/quackitsquinn/lazuli"
 description = "A socket library for consistent, quick, and easy data transfer"
 keywords = ["socket", "networking", "data transfer", "tcp", "lazuli"]
+publish = true
 
 
 [dependencies]

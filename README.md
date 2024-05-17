@@ -19,7 +19,7 @@ Here is an example of how to use lazuli to send and receive data:
 
 ```rust
 
-let client = Client::new(("127.0.0.1", 8080))
+let client = Client::connect(("127.0.0.1", 8080))
 
 let stream = client.stream::<String>();
 
