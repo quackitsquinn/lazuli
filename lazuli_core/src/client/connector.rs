@@ -1,13 +1,14 @@
 //! Contains the StreamConnector struct, which allows for the pushing of data into a Stream.
 
 use std::{
+    fmt::Debug,
     io::Read,
     mem::{self, ManuallyDrop},
 };
 
 use log::trace;
 
-use crate::{stream::Stream, ArcMutex, Result, PacketHeader, Sendable, UnknownType};
+use crate::{stream::Stream, ArcMutex, PacketHeader, Result, Sendable, UnknownType};
 
 /// A single byte type that is used to store the raw data.
 #[repr(transparent)]
@@ -22,6 +23,7 @@ pub struct StreamConnector {
     size: usize,
     grew: ArcMutex<usize>,
     conversion_fn: fn(&mut dyn Read) -> Result<Box<[u8]>>,
+    type_name: &'static str,
 }
 
 impl StreamConnector {
@@ -33,6 +35,7 @@ impl StreamConnector {
             size: mem::size_of::<T>(),
             grew: stream.get_grow_by(),
             conversion_fn: T::as_conversion_fn(),
+            type_name: std::any::type_name::<T>(),
         }
     }
     /// Pushes data to the stream.
@@ -87,6 +90,19 @@ impl StreamConnector {
         );
         unsafe { self.push_raw(converted)? };
         Ok(())
+    }
+    /// Returns the type name of the stream. This is mainly used for the debug implementation.
+    pub fn type_name(&self) -> &'static str {
+        self.type_name
+    }
+}
+
+impl Debug for StreamConnector {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("StreamConnector")
+            .field("type_name", &self.type_name)
+            .field("size", &self.size)
+            .finish()
     }
 }
 

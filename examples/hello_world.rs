@@ -7,7 +7,7 @@ const ADDRESS: SocketAddr = SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::LOCALHOST
 pub fn main() {
     // Initialize the server and client. The server will accept a connection from the client.
     let mut server = Server::new(ADDRESS).unwrap();
-    let mut client = Client::new(ADDRESS).unwrap();
+    let mut client = Client::connect(ADDRESS).unwrap();
 
     // Accept the connection from the client. This returns a Client object that can be used to communicate with the client.
     // The client object is wrapped in an Arc<Mutex<Client>> to allow for thread-safe access.

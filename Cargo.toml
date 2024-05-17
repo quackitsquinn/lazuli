@@ -1,17 +1,25 @@
 
 [package]
 name = "lazuli"
-version = "0.1.1"
+version = "0.1.0"
 edition = "2021"
+publish = true
+
 
 [workspace]
 members = ["lazuli_core", "lazuli_derive"]
 
 [workspace.package]
 version = "0.1.0"
+authors = ["quackitsquinn"]
+license = "GPL-3.0"
+readme = "README.md"
+repository = "https://github.com/quackitsquinn/lazuli"
+description = "A socket library for consistent, quick, and easy data transfer"
+keywords = ["socket", "networking", "data transfer", "tcp", "lazuli"]
 
 
 [dependencies]
-lazuli_core = { path = "lazuli_core" }
-lazuli_derive = { path = "lazuli_derive" }
+lazuli_core = { path = "lazuli_core", version = "0.1.0"}
+lazuli_derive = { path = "lazuli_derive", version = "0.1.0"}
 

@@ -104,6 +104,7 @@ mod test {
         let mut client2 = make_server_client_pair(&mut server);
         let mut str_stream_1 = client1.0.stream::<String>();
         let mut str_stream_2 = client2.0.stream::<String>();
+        println!("{:#?}", client1.0);
         server.broadcast(&"Hello, world!".to_owned())?;
         client1.0.recv()?;
         client2.0.recv()?;

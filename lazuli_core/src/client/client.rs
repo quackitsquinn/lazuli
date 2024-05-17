@@ -102,7 +102,7 @@ impl Client {
         T: Sendable + 'static,
     {
         // SAFETY: This is safe because the stream is connected to a StreamConnector, which is guaranteed to be valid.
-        let stream: Stream<T> = unsafe { Stream::new() };
+        let stream: Stream<T> = Stream::new();
         let info = StreamConnector::new(&stream);
         self.streams
             .lock()
@@ -138,6 +138,26 @@ impl Client {
     }
     pub fn set_nonblocking(&self, nonblocking: bool) -> io::Result<()> {
         self.socket.lock().unwrap().set_nonblocking(nonblocking)
+    }
+}
+
+impl Debug for Client {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Client")
+            .field("peer_addr", &self.peer_addr())
+            .field("is_connected", &self.is_connected())
+            .field(
+                "streams",
+                // This line pasta converts the array of StreamConnector into an array of &str
+                &self
+                    .streams
+                    .lock()
+                    .unwrap()
+                    .values()
+                    .map(|x| x.type_name())
+                    .collect::<Vec<&str>>(),
+            )
+            .finish()
     }
 }
 
@@ -249,7 +269,7 @@ mod tests {
 
     #[test]
     fn test_stream_data_struct() {
-        let mut stream: Stream<TestStruct> = unsafe { Stream::new() };
+        let mut stream: Stream<TestStruct> = Stream::new();
         let mut data = StreamConnector::new(&stream);
         unsafe {
             data.push_raw(TestStruct { a: 30, b: 40 }.send().into())
