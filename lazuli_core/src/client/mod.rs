@@ -62,7 +62,7 @@ mod test_utils {
 
         let server = server.unwrap();
 
-        let client = Client::new(server.local_addr().unwrap()).unwrap();
+        let client = Client::connect(server.local_addr().unwrap()).unwrap();
         let server = server.accept().unwrap().0;
 
         (client, Client::from_stream(server))

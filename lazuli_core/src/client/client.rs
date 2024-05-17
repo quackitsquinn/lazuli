@@ -10,7 +10,7 @@ use log::trace;
 use crate::{hash_type_id, stream::Stream, ArcMutex, Result, Sendable};
 
 use super::{connector::StreamConnector, input, listener::SocketListener, StreamCollection};
-
+/// A client for sending and receiving data.
 pub struct Client {
     socket: ArcMutex<TcpStream>,
     streams: ArcMutex<StreamCollection>,
@@ -39,7 +39,7 @@ impl Client {
         self
     }
 
-    pub fn new<T: ToSocketAddrs>(addr: T) -> Result<Client> {
+    pub fn connect<T: ToSocketAddrs>(addr: T) -> Result<Client> {
         let stream = addr.to_socket_addrs()?;
         for addr in stream {
             match TcpStream::connect(addr) {
@@ -70,8 +70,8 @@ impl Client {
         socket.write_all(&bytes)?;
         Ok(())
     }
-    /// Receives data from the socket.
-    /// This is blocking, and for now, manual.
+
+    /// Receives data from the socket. This does not return anything, but instead stores the data in the stream.
     pub fn recv(&mut self) -> Result<()> {
         if self.listener.is_some() {
             return Err(io::Error::new(
@@ -101,7 +101,8 @@ impl Client {
     where
         T: Sendable + 'static,
     {
-        let stream: Stream<T> = Stream::new();
+        // SAFETY: This is safe because the stream is connected to a StreamConnector, which is guaranteed to be valid.
+        let stream: Stream<T> = unsafe { Stream::new() };
         let info = StreamConnector::new(&stream);
         self.streams
             .lock()
@@ -248,7 +249,7 @@ mod tests {
 
     #[test]
     fn test_stream_data_struct() {
-        let mut stream: Stream<TestStruct> = Stream::new();
+        let mut stream: Stream<TestStruct> = unsafe { Stream::new() };
         let mut data = StreamConnector::new(&stream);
         unsafe {
             data.push_raw(TestStruct { a: 30, b: 40 }.send().into())

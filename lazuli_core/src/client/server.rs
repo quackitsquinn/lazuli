@@ -3,7 +3,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use crate::{ArcMutex, Result, Sendable, Client};
+use crate::{ArcMutex, Client, Result, Sendable};
 
 pub struct Server {
     listener: TcpListener,
@@ -80,7 +80,7 @@ mod test {
 
     fn make_server_client_pair(server: &mut Server) -> (Client, ArcMutex<Client>) {
         let addr = server.local_addr().unwrap();
-        let client = Client::new(addr).unwrap();
+        let client = Client::connect(addr).unwrap();
         let server_client = server.accept().unwrap();
         (client, server_client)
     }
