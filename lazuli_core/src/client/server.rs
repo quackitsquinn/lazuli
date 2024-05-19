@@ -74,7 +74,9 @@ impl Server {
 
 #[cfg(test)]
 mod test {
-    use crate::client::test_utils::{get_socket_addr, make_server, test_send_recv};
+    use std::net::Ipv4Addr;
+
+    use crate::client::test_utils::{make_server, test_send_recv};
 
     use super::*;
 
@@ -114,7 +116,7 @@ mod test {
     }
     #[test]
     fn test_nonblocking_server() -> Result<()> {
-        let mut server = Server::new_nonblocking(get_socket_addr())?;
+        let mut server = Server::new_nonblocking((Ipv4Addr::LOCALHOST, 0))?;
         assert!(server.accept().is_err());
         if let Err(e) = server.accept() {
             assert_eq!(e.kind(), std::io::ErrorKind::WouldBlock);

@@ -24,32 +24,12 @@ mod test_utils {
     use self::server::Server;
 
     use super::*;
-    static PORTS_BASE: u16 = 5000;
-    static PORT_ACTIVE_BASE: Mutex<u16> = Mutex::new(PORTS_BASE);
-
-    fn addr_in_use(addr: SocketAddr) -> bool {
-        use std::net::TcpListener;
-        TcpListener::bind(addr).is_err()
-    }
-
-    pub(super) fn get_socket_addr() -> SocketAddr {
-        let mut port = *PORT_ACTIVE_BASE.lock().unwrap();
-        let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), port);
-        while addr_in_use(addr) {
-            debug!("Port {} is in use, trying next port.", port);
-            port += 1;
-        }
-        *PORT_ACTIVE_BASE.lock().unwrap() = port + 1;
-        addr
-    }
 
     /// Creates a client and server pair.
     /// (client, server)
     pub(super) fn make_client_server_pair() -> (Client, Client) {
         use std::net::TcpListener;
-        let server = TcpListener::bind((Ipv4Addr::LOCALHOST, *PORT_ACTIVE_BASE.lock().unwrap()));
-
-        *PORT_ACTIVE_BASE.lock().unwrap() += 1;
+        let server = TcpListener::bind((Ipv4Addr::LOCALHOST, 0));
 
         if let Err(e) = server {
             // If the port is in use, try again.
@@ -69,7 +49,7 @@ mod test_utils {
     }
 
     pub(super) fn make_server() -> Server {
-        let server = Server::new((Ipv4Addr::LOCALHOST, *PORT_ACTIVE_BASE.lock().unwrap()));
+        let server = Server::new((Ipv4Addr::LOCALHOST, 0));
 
         if let Err(e) = server {
             // If the port is in use, try again.
@@ -79,8 +59,6 @@ mod test_utils {
                 panic!("Failed to bind server: {}", e);
             }
         }
-
-        *PORT_ACTIVE_BASE.lock().unwrap() += 1;
 
         server.unwrap()
     }
