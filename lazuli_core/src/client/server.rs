@@ -5,6 +5,8 @@ use std::{
 
 use crate::{ArcMutex, Client, Result, Sendable};
 
+use super::config::{self, SocketConfig};
+
 pub struct Server {
     listener: TcpListener,
     streams: Vec<ArcMutex<Client>>,
@@ -19,14 +21,10 @@ impl Server {
             streams: vec![],
         })
     }
-    /// Creates a new non-blocking server.
-    pub fn new_nonblocking<T: ToSocketAddrs>(addrs: T) -> Result<Self> {
-        let listener = TcpListener::bind(addrs)?;
-        listener.set_nonblocking(true)?;
-        Ok(Server {
-            listener,
-            streams: vec![],
-        })
+    /// Adds a configuration to the server.
+    pub fn with_config(self, config: SocketConfig) -> Result<Self> {
+        config.apply_listener(&self.listener)?;
+        Ok(self)
     }
     /// Accepts a connection.
     pub fn accept(&mut self) -> Result<ArcMutex<Client>> {
@@ -116,7 +114,8 @@ mod test {
     }
     #[test]
     fn test_nonblocking_server() -> Result<()> {
-        let mut server = Server::new_nonblocking((Ipv4Addr::LOCALHOST, 0))?;
+        let mut server = Server::new((Ipv4Addr::LOCALHOST, 0))?
+            .with_config(SocketConfig::new().blocking(false))?;
         assert!(server.accept().is_err());
         if let Err(e) = server.accept() {
             assert_eq!(e.kind(), std::io::ErrorKind::WouldBlock);
