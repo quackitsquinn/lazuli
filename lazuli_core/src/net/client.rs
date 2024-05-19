@@ -174,7 +174,7 @@ impl Debug for Client {
 mod tests {
     use std::vec;
 
-    use crate::{client::test_utils::make_client_server_pair, stream::Stream, Result, Sendable};
+    use crate::{net::test_utils::make_client_server_pair, stream::Stream, Result, Sendable};
 
     use super::StreamConnector;
 
