@@ -74,7 +74,7 @@ impl Server {
 mod test {
     use std::net::Ipv4Addr;
 
-    use crate::client::test_utils::{make_server, test_send_recv};
+    use crate::net::test_utils::{make_server, test_send_recv};
 
     use super::*;
 

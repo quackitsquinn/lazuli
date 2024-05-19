@@ -5,8 +5,8 @@ use std::{
     hash::{DefaultHasher, Hash, Hasher},
 };
 
-mod client;
 pub mod header;
+mod net;
 mod sendable;
 mod stream;
 
@@ -42,7 +42,7 @@ fn hash_type_id<T: 'static>() -> u32 {
     hasher.finish() as u32
 }
 
-pub use client::Client;
-pub use client::Server;
 pub(crate) use header::*;
+pub use net::Client;
+pub use net::Server;
 pub use sendable::Sendable;
