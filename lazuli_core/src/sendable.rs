@@ -46,8 +46,9 @@ pub trait Sendable: Sized + std::fmt::Debug {
 }
 
 /// Converts the type to a function that can be used to convert incoming data to the type.
-/// Returns a Vec<u8> that is the type's representation in memory.
-/// This is used as a hacky way to convert the type if the type cant be known at runtime.
+/// This function hides the type of the data, allowing for the conversion function to be used in a generic context.
+///
+/// This function is used internally by `StreamConnector`.
 pub(crate) fn as_conversion_fn<T: Sendable>() -> fn(&mut dyn Read) -> Result<Box<[u8]>> {
     |data| {
         let conversion = Box::new(T::recv(data)?);
