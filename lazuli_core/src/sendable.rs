@@ -43,23 +43,24 @@ pub trait Sendable: Sized + std::fmt::Debug {
 
     /// Converts an incoming stream of bytes to the type.
     fn recv(data: &mut dyn Read) -> Result<Self>;
+}
 
-    /// Converts the type to a function that can be used to convert incoming data to the type.
-    /// Returns a Vec<u8> that is the type's representation in memory.
-    /// This is used as a hacky way to convert the type if the type cant be known at runtime.
-    fn as_conversion_fn() -> fn(&mut dyn Read) -> Result<Box<[u8]>> {
-        |data| {
-            let conversion = Box::new(Self::recv(data)?);
-            trace!("Converted to bytes: {:?}", conversion);
-            let as_slice_bytes = unsafe {
-                // We use a slice to get the bytes of the type. This is safe because we are using the size of the type to get the slice.
-                slice::from_raw_parts(
-                    Box::leak(conversion) as *mut Self as *mut u8,
-                    mem::size_of::<Self>(),
-                )
-            };
-            Ok(as_slice_bytes.into())
-        }
+/// Converts the type to a function that can be used to convert incoming data to the type.
+/// This function hides the type of the data, allowing for the conversion function to be used in a generic context.
+///
+/// This function is used internally by `StreamConnector`.
+pub(crate) fn as_conversion_fn<T: Sendable>() -> fn(&mut dyn Read) -> Result<Box<[u8]>> {
+    |data| {
+        let conversion = Box::new(T::recv(data)?);
+        trace!("Converted to bytes: {:?}", conversion);
+        let as_slice_bytes = unsafe {
+            // We use a slice to get the bytes of the type. This is safe because we are using the size of the type to get the slice.
+            slice::from_raw_parts(
+                Box::leak(conversion) as *mut T as *mut u8,
+                mem::size_of::<T>(),
+            )
+        };
+        Ok(as_slice_bytes.into())
     }
 }
 

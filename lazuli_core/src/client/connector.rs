@@ -8,7 +8,7 @@ use std::{
 
 use log::trace;
 
-use crate::{stream::Stream, ArcMutex, PacketHeader, Result, Sendable, UnknownType};
+use crate::{sendable, stream::Stream, ArcMutex, PacketHeader, Result, Sendable, UnknownType};
 
 /// A single byte type that is used to store the raw data.
 #[repr(transparent)]
@@ -34,7 +34,7 @@ impl StreamConnector {
             vec_ptr: unsafe { mem::transmute(stream.get_ptr()) },
             size: mem::size_of::<T>(),
             grew: stream.get_grow_by(),
-            conversion_fn: T::as_conversion_fn(),
+            conversion_fn: sendable::as_conversion_fn::<T>(),
             type_name: std::any::type_name::<T>(),
         }
     }
