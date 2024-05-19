@@ -9,7 +9,10 @@ use log::trace;
 
 use crate::{hash_type_id, stream::Stream, ArcMutex, Result, Sendable};
 
-use super::{connector::StreamConnector, input, listener::SocketListener, StreamCollection};
+use super::{
+    config::SocketConfig, connector::StreamConnector, input, listener::SocketListener,
+    StreamCollection,
+};
 /// A client for sending and receiving data.
 pub struct Client {
     socket: ArcMutex<TcpStream>,
@@ -53,6 +56,12 @@ impl Client {
             io::ErrorKind::AddrNotAvailable,
             "No available addresses",
         ))
+    }
+
+    /// Applies the configuration to the socket.
+    pub fn with_config(self, config: &SocketConfig) -> Result<Self> {
+        config.apply_stream(&mut self.socket.lock().unwrap())?;
+        Ok(self)
     }
 
     /// Sends data to the socket.
