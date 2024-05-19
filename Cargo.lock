@@ -19,7 +19,7 @@ checksum = "49f1f14873335454500d59611f1cf4a4b0f786f9ac11f4312a78e4cf2566695b"
 
 [[package]]
 name = "lazuli"
-version = "0.1.0"
+version = "0.1.1-rc.1"
 dependencies = [
  "lazuli_core",
  "lazuli_derive",
@@ -27,7 +27,7 @@ dependencies = [
 
 [[package]]
 name = "lazuli_core"
-version = "0.1.0"
+version = "0.1.1-rc.1"
 dependencies = [
  "log",
  "simplelog",
@@ -35,7 +35,7 @@ dependencies = [
 
 [[package]]
 name = "lazuli_derive"
-version = "0.1.0"
+version = "0.1.1-rc.1"
 dependencies = [
  "proc-macro2",
  "quote",
